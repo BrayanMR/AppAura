@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
@@ -28,6 +29,11 @@ class AppTheme {
         centerTitle: true,
         titleTextStyle: AppTextStyles.headlineMedium,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
       ),
 
       // Card
@@ -98,7 +104,10 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderFocus, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.borderFocus,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -130,9 +139,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.card,
         contentTextStyle: AppTextStyles.bodyMedium,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
 
@@ -141,9 +148,7 @@ class AppTheme {
         backgroundColor: AppColors.cardLight,
         labelStyle: AppTextStyles.bodySmall,
         side: const BorderSide(color: AppColors.border),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
 
       textTheme: const TextTheme(

@@ -75,4 +75,81 @@ router.post('/custom-token', async (req, res) => {
   }
 });
 
+// ── Login ──────────────────────────────────────────────────────────────────
+// POST /api/auth/login
+// Body: { email, password }
+
+const jwt = require('jsonwebtoken');
+
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log('📝 Login attempt:', email);
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email requerido' });
+    }
+    
+    const user = await getAuth().getUserByEmail(email.trim().toLowerCase());
+    console.log('✅ Usuario encontrado:', user.uid);
+    
+    // Si hay contraseña, validarla con la API REST de Firebase
+    if (password) {
+      const firebaseKey = process.env.FIREBASE_WEB_API_KEY;
+      console.log('🔑 Validando contraseña. API Key disponible:', !!firebaseKey);
+      
+      if (firebaseKey) {
+        try {
+          console.log('🌐 Llamando a Firebase REST API...');
+          const response = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: email.trim().toLowerCase(),
+                password: password,
+                returnSecureToken: true,
+              }),
+            }
+          );
+          
+          const data = await response.json();
+          console.log('📨 Respuesta Firebase:', response.status, data.error?.message);
+          
+          if (!response.ok) {
+            if (data.error?.message === 'INVALID_PASSWORD') {
+              console.log('❌ Contraseña incorrecta');
+              return res.status(401).json({ error: 'Contraseña incorrecta' });
+            }
+            console.log('❌ Error en Firebase:', data.error?.message);
+            return res.status(401).json({ error: data.error?.message || 'Credenciales inválidas' });
+          }
+          console.log('✅ Contraseña válida');
+        } catch (err) {
+          console.error('⚠️ Error en fetch de contraseña:', err.message);
+          return res.status(400).json({ error: 'Error validando contraseña' });
+        }
+      } else {
+        console.warn('⚠️ FIREBASE_WEB_API_KEY no configurada');
+      }
+    }
+    
+    console.log('✅ Login exitoso');
+    // Generar token JWT
+    const token = jwt.sign(
+      { uid: user.uid, email: user.email },
+      process.env.JWT_SECRET || 'mi_clave_secreta', // Usa variable de entorno o valor por defecto
+      { expiresIn: '7d' }
+    );
+    res.json({ token, uid: user.uid, email: user.email });
+  } catch (error) {
+    console.error('❌ Error en login:', error.message);
+    if (error.code === 'auth/user-not-found') {
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+    res.status(400).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -13,7 +13,7 @@ class MessagingService {
       'token': token,
       'title': title,
       'body': body,
-      if (data != null) 'data': data,
+      'data': ?data,
     }, auth: true);
     return Map<String, dynamic>.from(res);
   }
@@ -29,7 +29,7 @@ class MessagingService {
       'tokens': tokens,
       'title': title,
       'body': body,
-      if (data != null) 'data': data,
+      'data': ?data,
     }, auth: true);
     return Map<String, dynamic>.from(res);
   }
@@ -56,7 +56,7 @@ class MessagingService {
       'topic': topic,
       'title': title,
       'body': body,
-      if (data != null) 'data': data,
+      'data': ?data,
     }, auth: true);
     return Map<String, dynamic>.from(res);
   }

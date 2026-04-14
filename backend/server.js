@@ -3,18 +3,20 @@ const express = require('express');
 const cors    = require('cors');
 
 const { initializeFirebase } = require('./config/firebase');
+const { initializeSupabase } = require('./config/supabase');
 
 // Rutas
 const authRoutes      = require('./routes/auth');
 const firestoreRoutes = require('./routes/firestore');
 const rtdbRoutes      = require('./routes/rtdb');
-// const storageRoutes   = require('./routes/storage'); // desactivado temporalmente
+const storageRoutes   = require('./routes/storage');
 const messagingRoutes = require('./routes/messaging');
 const chatsRoutes     = require('./routes/chats');
 const forosRoutes     = require('./routes/foros');
-
+const aiRoutes        = require('./routes/ai');
 // ── Inicializar Firebase ───────────────────────────────────────────────────────
 initializeFirebase();
+initializeSupabase();
 
 // ── Crear app Express ──────────────────────────────────────────────────────────
 const app  = express();
@@ -30,15 +32,46 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── Ruta de prueba Supabase ────────────────────────────────────────────────┐
+app.get('/api/test/supabase', async (req, res) => {
+  try {
+    const { getSupabase } = require('./config/supabase');
+    const supabase = getSupabase();
+    
+    // Intenta conectar con auth
+    const { error: authError } = await supabase.auth.getSession();
+    
+    if (authError) {
+      return res.status(500).json({ 
+        connected: false, 
+        error: '❌ Error al conectar',
+        details: authError.message 
+      });
+    }
+
+    res.json({ 
+      connected: true, 
+      message: '✅ Conectado a Supabase correctamente',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      connected: false, 
+      error: '❌ Error critico',
+      details: error.message 
+    });
+  }
+});
+
 // ── Rutas de la API ────────────────────────────────────────────────────────────
 app.use('/api/auth',      authRoutes);
 app.use('/api/firestore', firestoreRoutes);
 app.use('/api/rtdb',      rtdbRoutes);
-// app.use('/api/storage',   storageRoutes); // desactivado temporalmente
+app.use('/api/storage',   storageRoutes);
 app.use('/api/messaging', messagingRoutes);
 app.use('/api/chats',     chatsRoutes);
 app.use('/api/foros',     forosRoutes);
-
+app.use('/api/ai',        aiRoutes);
 // ── Manejador de errores global ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Error no manejado:', err);
@@ -46,16 +79,20 @@ app.use((err, req, res, next) => {
 });
 
 // ── Iniciar servidor ───────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor AurApp corriendo en http://localhost:${PORT}`);
-  console.log('📋 Rutas disponibles:');
-  console.log(`   GET  http://localhost:${PORT}/health`);
-  console.log(`   POST http://localhost:${PORT}/api/auth/register`);
-  console.log(`   POST http://localhost:${PORT}/api/auth/verify-token`);
-  console.log(`   GET  http://localhost:${PORT}/api/firestore/:collection`);
-  console.log(`   GET  http://localhost:${PORT}/api/rtdb/*path`);
-  console.log(`   POST http://localhost:${PORT}/api/storage/upload`);
-  console.log(`   POST http://localhost:${PORT}/api/messaging/send`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor AurApp corriendo en http://localhost:${PORT}`);
+    console.log('📋 Rutas disponibles:');
+    console.log(`   GET  http://localhost:${PORT}/health`);
+    console.log(`   POST http://localhost:${PORT}/api/auth/register`);
+    console.log(`   POST http://localhost:${PORT}/api/auth/verify-token`);
+    console.log(`   GET  http://localhost:${PORT}/api/firestore/:collection`);
+    console.log(`   GET  http://localhost:${PORT}/api/rtdb/*path`);
+    console.log(`   POST http://localhost:${PORT}/api/storage/upload`);
+    console.log(`   POST http://localhost:${PORT}/api/messaging/send`);
+    console.log(`   POST http://localhost:${PORT}/api/ai/triage`);
+
+  });
+}
 
 module.exports = app;

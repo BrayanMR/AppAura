@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'app.dart';
+import 'config/firebase_initializer.dart';
+import 'services/push_notifications_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await ensureFirebaseInitialized();
+  await PushNotificationsService.initialize();
+
   runApp(const AurApp());
 }

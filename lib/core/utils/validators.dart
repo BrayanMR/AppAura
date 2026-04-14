@@ -44,8 +44,9 @@ class Validators {
     String field = 'El campo',
   }) {
     if (value == null || value.trim().isEmpty) return '$field es requerido';
-    if (value.trim().length < min)
+    if (value.trim().length < min) {
       return '$field debe tener al menos $min caracteres';
+    }
     return null;
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
@@ -26,6 +28,14 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _telefonoCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+
+  // Controladores para autorización de padres
+  final _documentoUrlCtrl = TextEditingController();
+  final _nombrePadreCtrl = TextEditingController();
+  final _documentoPadreCtrl = TextEditingController();
+  final _parentescoPadreCtrl = TextEditingController();
+  final _observacionesPadresCtrl = TextEditingController();
+
   bool _loading = false;
   DateTime? _fechaNacimiento;
 
@@ -46,6 +56,24 @@ class _RegisterScreenState extends State<RegisterScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _nombreCtrl.dispose();
+    _apellidoCtrl.dispose();
+    _documentoCtrl.dispose();
+    _fechaCtrl.dispose();
+    _telefonoCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _documentoUrlCtrl.dispose();
+    _nombrePadreCtrl.dispose();
+    _documentoPadreCtrl.dispose();
+    _parentescoPadreCtrl.dispose();
+    _observacionesPadresCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _seleccionarFecha() async {
@@ -82,6 +110,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         child: child!,
       ),
     );
+
     if (picked != null) {
       setState(() {
         _fechaNacimiento = picked;
@@ -90,62 +119,85 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
   }
 
-  @override
-  void dispose() {
-    _animCtrl.dispose();
-    _nombreCtrl.dispose();
-    _apellidoCtrl.dispose();
-    _documentoCtrl.dispose();
-    _fechaCtrl.dispose();
-    _telefonoCtrl.dispose();
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
+  int _calculateAge(DateTime birthDate) {
+    final now = DateTime.now();
+    var age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  String? _validateOnlyDigits(
+    String? value, {
+    required String field,
+    int minLength = 0,
+  }) {
+    final requiredError = Validators.required(value, field: field);
+    if (requiredError != null) return requiredError;
+
+    final normalized = value!.trim();
+    if (!RegExp(r'^\d+$').hasMatch(normalized)) {
+      return '$field debe contener solo números';
+    }
+    if (minLength > 0 && normalized.length < minLength) {
+      return '$field debe tener al menos $minLength dígitos';
+    }
+    return null;
   }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_fechaNacimiento == null) {
+      await _showMessageDialog(
+        title: 'Dato faltante',
+        message: 'Debes seleccionar tu fecha de nacimiento.',
+        icon: Icons.warning_amber_rounded,
+        color: AppColors.secondaryDark,
+        actionLabel: 'Entendido',
+      );
+      return;
+    }
+
+    final edad = _calculateAge(_fechaNacimiento!);
+
+    // 🔒 Bloqueo si es menor de 13
+    if (edad < 13) {
+      await _showMessageDialog(
+        title: 'Registro no permitido',
+        message: 'Debes tener al menos 13 años para registrarte.',
+        icon: Icons.block,
+        color: AppColors.error,
+        actionLabel: 'Entendido',
+      );
+      return;
+    }
+
     setState(() => _loading = true);
+
     try {
       final email = _emailCtrl.text.trim();
       final password = _passCtrl.text;
       final nombre = _nombreCtrl.text.trim();
       final apellido = _apellidoCtrl.text.trim();
 
-      // 1) Crear usuario en Firebase Auth via backend
-      final res = await AuthService.register(
+      // 🔥 REGISTRO
+      final registerRes = await AuthService.register(
         email: email,
         password: password,
         displayName: '$nombre $apellido',
       );
-      final uid = res['uid'] as String;
 
-      // 2) Login automático en el cliente Firebase
-      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // 3) Verificar token con el backend
-      final idToken = await cred.user?.getIdToken(true);
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('No se pudo obtener el token');
-      }
-      await AuthService.verifyToken(idToken);
-
-      // 4) Calcular edad
-      int? edad;
-      if (_fechaNacimiento != null) {
-        final hoy = DateTime.now();
-        edad = hoy.year - _fechaNacimiento!.year;
-        if (hoy.month < _fechaNacimiento!.month ||
-            (hoy.month == _fechaNacimiento!.month &&
-                hoy.day < _fechaNacimiento!.day)) {
-          edad--;
-        }
+      final uid = registerRes['uid'] as String?;
+      if (uid == null || uid.isEmpty) {
+        throw Exception('No se pudo obtener el UID del usuario creado');
       }
 
-      // 5) Guardar perfil completo en Firestore colección 'usuarios'
+      final requiereAutorizacion = edad < 18;
+
+      // ✅ GUARDAR EN FIRESTORE (no depende de login en cliente)
       await FirestoreService.setDocument('usuarios', uid, {
         'uid': uid,
         'nombre': nombre,
@@ -153,38 +205,309 @@ class _RegisterScreenState extends State<RegisterScreen>
         'documento': _documentoCtrl.text.trim(),
         'telefono': _telefonoCtrl.text.trim(),
         'correo': email,
-        'fechaNacimiento': _fechaNacimiento?.toIso8601String(),
+        'fechaNacimiento': _fechaNacimiento!.toIso8601String(),
         'edad': edad,
         'imagenUrl': '',
         'reporte': '',
         'role': 'usuario',
+        'activo': false,
+        'autorizacionPadres': {
+          'estado': requiereAutorizacion
+              ? 'pendiente_revision'
+              : 'no_requerida',
+          'requiereAutorizacion': requiereAutorizacion,
+        },
+        // Campos individuales fuera de la lista
+        'documentoUrl': _documentoUrlCtrl.text
+            .trim(), // URL del documento de autorización
+        'nombrePadre': _nombrePadreCtrl.text
+            .trim(), // Nombre del padre/madre/acudiente
+        'documentoPadre': _documentoPadreCtrl.text
+            .trim(), // Documento del padre/madre/acudiente
+        'parentescoPadre': _parentescoPadreCtrl.text
+            .trim(), // Parentesco (padre, madre, acudiente)
+        'observacionesPadres': _observacionesPadresCtrl.text
+            .trim(), // Observaciones
         'createdAt': DateTime.now().toIso8601String(),
       });
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.homeUsuario);
-      }
+      if (!mounted) return;
+
+      await _showSuccessDialog(
+        email: email,
+        nombre: nombre,
+        uid: uid,
+        requiereAutorizacion: requiereAutorizacion,
+      );
     } on FirebaseAuthException catch (e) {
-      String msg = 'Error al registrarse';
-      if (e.code == 'email-already-in-use')
-        msg = 'El correo ya está registrado';
-      if (e.code == 'weak-password')
-        msg = 'La contraseña es muy débil (mínimo 6 caracteres)';
-      if (e.code == 'invalid-email') msg = 'Correo inválido';
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
+        await _showMessageDialog(
+          title: 'No se pudo crear la cuenta',
+          message: _registerErrorMessage(e.code, e.message),
+          icon: Icons.error_outline,
+          color: AppColors.error,
+          actionLabel: 'Entendido',
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        await _showMessageDialog(
+          title: 'Error',
+          message: _registerErrorMessage(null, e.toString()),
+          icon: Icons.error_outline,
+          color: AppColors.error,
+          actionLabel: 'Entendido',
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _registerErrorMessage(String? code, String? rawMessage) {
+    final message = (rawMessage ?? '').toLowerCase();
+
+    if (code == 'email-already-in-use' || message.contains('already in use')) {
+      return 'El correo ya está registrado. Usa otro correo o inicia sesión.';
+    }
+
+    if (code == 'weak-password' || message.contains('weak password')) {
+      return 'La contraseña es muy débil. Usa al menos 6 caracteres.';
+    }
+
+    if (code == 'invalid-email' || message.contains('invalid email')) {
+      return 'El correo no es válido. Revisa que esté bien escrito.';
+    }
+
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('failed to fetch')) {
+      return 'No se pudo conectar con el servidor. Intenta de nuevo.';
+    }
+
+    return 'Hubo un problema al crear la cuenta. Intenta de nuevo.';
+  }
+
+  Future<void> _showSuccessDialog({
+    required String email,
+    required String nombre,
+    required String uid,
+    required bool requiereAutorizacion,
+  }) async {
+    final title = requiereAutorizacion
+        ? 'Cuenta creada'
+        : 'Registro completado';
+    final message = requiereAutorizacion
+        ? 'Tu cuenta y el correo $email ya fueron creados. Solo falta la autorización de tu acudiente para continuar.'
+        : 'Tu cuenta quedó registrada. Debes esperar la autorización del administrador para ingresar.';
+    final accentColor = requiereAutorizacion
+        ? AppColors.primary
+        : AppColors.secondary;
+    final icon = requiereAutorizacion
+        ? Icons.verified_user_outlined
+        : Icons.check_circle_outline;
+
+    await _showMessageDialog(
+      title: title,
+      message: message,
+      icon: icon,
+      color: accentColor,
+      actionLabel: requiereAutorizacion ? 'Continuar' : 'Ir a iniciar sesión',
+      email: email,
+      onActionPressed: () {
+        if (!mounted) return;
+
+        Navigator.pushReplacementNamed(
+          context,
+          requiereAutorizacion ? AppRoutes.autorizacionPadres : AppRoutes.login,
+          arguments: requiereAutorizacion
+              ? <String, dynamic>{'uid': uid, 'nombreUsuario': nombre}
+              : null,
+        );
+      },
+    );
+  }
+
+  Future<void> _showMessageDialog({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color color,
+    required String actionLabel,
+    String? email,
+    VoidCallback? onActionPressed,
+  }) async {
+    if (!mounted) return;
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: title,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 50),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.18),
+                      blurRadius: 30,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: -12,
+                        bottom: -12,
+                        child: Transform.rotate(
+                          angle: -0.55,
+                          child: Container(
+                            width: 120,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -40,
+                        bottom: -54,
+                        child: Transform.rotate(
+                          angle: -0.56,
+                          child: Container(
+                            width: 240,
+                            height: 120,
+                            color: const Color(0xFFA68BC8),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        color: const Color(0xFFE8DFF2),
+                        padding: const EdgeInsets.fromLTRB(24, 72, 24, 28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title.toUpperCase(),
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.displayMedium.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              message,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.88,
+                                ),
+                                fontWeight: FontWeight.w700,
+                                height: 1.35,
+                              ),
+                            ),
+                            if (email != null) ...[
+                              const SizedBox(height: 14),
+                              Text(
+                                email,
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.primaryDark,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: color,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.of(dialogContext).pop();
+                                  onActionPressed?.call();
+                                },
+                                child: Text(actionLabel),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(color: Colors.white, width: 6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.14),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 54),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(
+              begin: 0.92,
+              end: 1.0,
+            ).animate(curvedAnimation),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.06),
+                end: Offset.zero,
+              ).animate(curvedAnimation),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   InputDecoration _fieldDecoration(String hint) {
@@ -241,11 +564,9 @@ class _RegisterScreenState extends State<RegisterScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
-
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Decoración diagonal superior ──────────────────────────────────
           Positioned(
             top: -topHeight * 0.99,
             left: -horizontalBleed,
@@ -270,7 +591,6 @@ class _RegisterScreenState extends State<RegisterScreen>
               ),
             ),
           ),
-          // ── Decoración diagonal inferior ──────────────────────────────────
           Positioned(
             bottom: -bottomHeight * 0.99,
             left: -horizontalBleed,
@@ -295,7 +615,6 @@ class _RegisterScreenState extends State<RegisterScreen>
               ),
             ),
           ),
-          // ── Contenido ─────────────────────────────────────────────────────
           SafeArea(
             child: Padding(
               padding: EdgeInsets.only(
@@ -318,8 +637,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                         child: Form(
                           key: _formKey,
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              // Título
                               Text(
                                 'Crear Cuenta',
                                 style: AppTextStyles.displayMedium.copyWith(
@@ -327,14 +646,21 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              // Logo
+                              const SizedBox(height: 10),
+                              Text(
+                                'Completa tus datos para registrarte',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 14),
                               SizedBox(
                                 width: 110,
                                 child: Image.asset(
                                   'assets/images/logo.png',
                                   fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const Icon(
+                                  errorBuilder: (_, _, _) => const Icon(
                                     Icons.broken_image_outlined,
                                     color: AppColors.primary,
                                     size: 64,
@@ -342,7 +668,6 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              // Nombre + Apellido
                               Row(
                                 children: [
                                   Expanded(
@@ -358,29 +683,31 @@ class _RegisterScreenState extends State<RegisterScreen>
                                     child: TextFormField(
                                       controller: _apellidoCtrl,
                                       style: fieldStyle,
-                                      validator: (v) =>
-                                          (v == null || v.trim().isEmpty)
-                                          ? 'Requerido'
-                                          : null,
+                                      validator: (value) => Validators.required(
+                                        value,
+                                        field: 'El apellido',
+                                      ),
                                       decoration: _fieldDecoration('Apellido'),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              // Documento
                               TextFormField(
                                 controller: _documentoCtrl,
                                 style: fieldStyle,
                                 keyboardType: TextInputType.number,
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? 'Requerido'
-                                    : null,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (value) => _validateOnlyDigits(
+                                  value,
+                                  field: 'El documento',
+                                  minLength: 6,
+                                ),
                                 decoration: _fieldDecoration('Documento'),
                               ),
                               const SizedBox(height: 12),
-                              // Fecha de nacimiento + Teléfono
                               Row(
                                 children: [
                                   Expanded(
@@ -389,13 +716,13 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       style: fieldStyle,
                                       readOnly: true,
                                       onTap: _seleccionarFecha,
-                                      validator: (v) =>
-                                          (v == null || v.trim().isEmpty)
-                                          ? 'Requerido'
-                                          : null,
+                                      validator: (value) => Validators.required(
+                                        value,
+                                        field: 'La fecha de nacimiento',
+                                      ),
                                       decoration:
                                           _fieldDecoration(
-                                            'fecha de nacimiento',
+                                            'Fecha de nacimiento',
                                           ).copyWith(
                                             suffixIcon: const Icon(
                                               Icons.calendar_month_outlined,
@@ -411,49 +738,40 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       controller: _telefonoCtrl,
                                       style: fieldStyle,
                                       keyboardType: TextInputType.phone,
-                                      validator: (v) =>
-                                          (v == null || v.trim().isEmpty)
-                                          ? 'Requerido'
-                                          : null,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      validator: (value) => _validateOnlyDigits(
+                                        value,
+                                        field: 'El telefono',
+                                        minLength: 7,
+                                      ),
                                       decoration: _fieldDecoration('Telefono'),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              // Correo
                               TextFormField(
                                 controller: _emailCtrl,
                                 style: fieldStyle,
                                 keyboardType: TextInputType.emailAddress,
                                 validator: Validators.email,
-                                decoration: _fieldDecoration('correo'),
+                                decoration: _fieldDecoration(
+                                  'Correo electronico',
+                                ),
                               ),
                               const SizedBox(height: 12),
-                              // Contraseña
                               TextFormField(
                                 controller: _passCtrl,
                                 style: fieldStyle,
                                 obscureText: true,
                                 validator: Validators.password,
-                                decoration: _fieldDecoration('contraseña'),
-                              ),
-                              const SizedBox(height: 12),
-                              // Subir autorización
-                              TextFormField(
-                                style: fieldStyle,
-                                readOnly: true,
-                                onTap: () {
-                                  // TODO: implementar selector de archivo
-                                },
-                                decoration: _fieldDecoration(
-                                  'subir autorizacion de tus padres',
-                                ),
+                                decoration: _fieldDecoration('Contraseña'),
                               ),
                               const SizedBox(height: 24),
-                              // Botón
                               CustomButton(
-                                label: 'INGRESAR',
+                                label: 'CREAR CUENTA',
                                 onPressed: _register,
                                 isLoading: _loading,
                                 color: AppColors.secondaryDark,

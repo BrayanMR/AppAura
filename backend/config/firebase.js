@@ -7,7 +7,17 @@ let db, auth, rtdb, storage, messaging;
 function initializeFirebase() {
   if (admin.apps.length > 0) return; 
 
-  const serviceAccount = require(path.resolve(__dirname, '..', process.env.FIREBASE_SERVICE_ACCOUNT_PATH));
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    serviceAccount = require(path.resolve(__dirname, '..', process.env.FIREBASE_SERVICE_ACCOUNT_PATH));
+  } else {
+    throw new Error('Falta FIREBASE_SERVICE_ACCOUNT_JSON o FIREBASE_SERVICE_ACCOUNT_PATH');
+  }
 
   const appConfig = {
     credential: admin.credential.cert(serviceAccount),

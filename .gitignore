@@ -62,3 +62,5 @@ backend/.env
 
 # ── Node backend ─────────────────────────────────────────────────────────────
 backend/node_modules/
+node_modules/
+# Node modules en la raiz del monorepo

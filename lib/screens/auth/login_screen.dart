@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
+import '../../config/firebase_initializer.dart';
 import '../../routes/app_routes.dart';
+import '../../services/firestore_service.dart';
 import '../../widgets/custom_button.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../services/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,10 +54,22 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  bool _isTruthy(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'si';
+    }
+    return false;
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
+      await ensureFirebaseInitialized();
+
       final email = _emailCtrl.text.trim();
       final password = _passCtrl.text;
 
@@ -64,38 +81,352 @@ class _LoginScreenState extends State<LoginScreen>
       final user = cred.user;
       if (user == null) throw Exception('no se pudo iniciar sesion');
 
-      // voy aqui obtener mi id token
-      final idToken = await user.getIdToken(true);
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('No se pudo obtener el token de autenticacion');
+      // --- NUEVO: Login en tu backend y guardar el JWT ---
+      final backendLogin = await ApiClient.post('/api/auth/login', {
+        'email': email,
+        'password': password,
+      });
+      if (backendLogin['token'] == null) {
+        throw Exception('No se pudo obtener el token JWT del backend');
       }
-      await AuthService.verifyToken(idToken);
+      await ApiClient.saveToken(backendLogin['token']);
+      // --- FIN NUEVO ---
+
+      // Ya no es necesario: await AuthService.verifyToken(idToken);
       await AuthService.getUser(user.uid);
+
+      final profile = await FirestoreService.getDocument('usuarios', user.uid);
+      final activo = _isTruthy(profile['activo']);
+      final roleValue = _normalizeRoleValue(profile['role'] ?? profile['rol']);
+      final autorizacion = profile['autorizacionPadres'];
+      final requiereAutorizacion =
+          autorizacion is Map && autorizacion['requiereAutorizacion'] == true;
+      final documentoUrl = autorizacion is Map
+          ? (autorizacion['documentoUrl'] as String?)
+          : null;
+      final tieneDocumentoEnviado =
+          documentoUrl != null && documentoUrl.trim().isNotEmpty;
+
+      if (!activo) {
+        await AuthService.signOut();
+        await FirebaseAuth.instance.signOut();
+
+        if (requiereAutorizacion && !tieneDocumentoEnviado) {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.autorizacionPadres,
+            arguments: <String, dynamic>{
+              'uid': user.uid,
+              'nombreUsuario': profile['nombre'] as String?,
+              'documentoUsuario': profile['documento'] as String?,
+            },
+          );
+          return;
+        }
+
+        if (!mounted) return;
+        await _showLoginAlert(
+          title: 'Cuenta inactiva',
+          message:
+              'Tu cuenta aún no está activa. Espera la validación del equipo. Si tienes dudas, contacta soporte.',
+          icon: Icons.info_outline,
+          color: AppColors.error,
+          actionLabel: 'Entendido',
+        );
+        return;
+      }
 
       // este es mi test para saber si esta fincionando mi bakend en  auth
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, AppRoutes.homeUsuario);
-    } on FirebaseAuthException catch (e) {
-      String msg = 'Error de autenticacion';
-      if (e.code == 'user-not-found') msg = 'Usuario no encontrado';
-      if (e.code == 'wrong-password') msg = 'Contrasena incorrecta';
-      if (e.code == 'invalid-email') msg = 'Correo invalido';
-      if (e.code == 'invalid-credential') msg = 'Credenciales invalidas';
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
-      }
+      await _showLoginAlert(
+        title: 'Inicio de sesión correcto',
+        message: 'Iniciaste sesión correctamente. Ya puedes continuar.',
+        icon: Icons.check_circle_outline,
+        color: AppColors.secondaryDark,
+        actionLabel: 'Continuar',
+      );
+      Navigator.pushReplacementNamed(
+        context,
+        roleValue == 'psicologo'
+            ? AppRoutes.homePsicologo
+            : AppRoutes.homeUsuario,
+        arguments: <String, dynamic>{
+          'uid': user.uid,
+          'nombreUsuario':
+              profile['nombre'] as String? ?? user.displayName ?? email,
+          'documentoUsuario': profile['documento'] as String?,
+          'role': roleValue,
+        },
+      );
     } catch (e) {
+      // Manejo de errores
+      setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        await _showLoginAlert(
+          title: 'No se pudo iniciar sesión',
+          message: _loginErrorMessage(null, e.toString()),
+          icon: Icons.info_outline,
+          color: AppColors.error,
+          actionLabel: 'Entendido',
+        );
       }
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
+    setState(() => _loading = false);
+  }
+
+  String _loginErrorMessage(String? code, String? rawMessage) {
+    final detail = _normalizeErrorDetail(rawMessage);
+    final message = detail.toLowerCase();
+
+    if (code == 'wrong-password' ||
+        message.contains('wrong password') ||
+        message.contains('invalid login credentials') ||
+        message.contains('password is invalid') ||
+        message.contains('incorrect password') ||
+        message.contains('contraseña') && message.contains('incorrecta')) {
+      return 'La contraseña es incorrecta. Revisa e inténtalo otra vez.';
+    }
+
+    if (code == 'user-not-found' ||
+        message.contains('usuario no encontrado') ||
+        message.contains('user-not-found') ||
+        message.contains('there is no user record') ||
+        message.contains('no user record')) {
+      return 'No hay una cuenta registrada con ese correo.';
+    }
+
+    if (message.contains('documento no encontrado') ||
+        message.contains('error 404') ||
+        message.contains('not found')) {
+      return 'Se inició sesión, pero no existe tu perfil en la colección usuarios. Contacta al administrador.';
+    }
+
+    if (code == 'invalid-credential' || message.contains('credential')) {
+      return 'Correo o contraseña incorrectos. Verifica e inténtalo de nuevo.';
+    }
+
+    if (code == 'invalid-email' ||
+        message.contains('correo inválido') ||
+        message.contains('invalid email')) {
+      return 'El correo no es válido. Revisa que esté bien escrito.';
+    }
+
+    if (message.contains('no firebase app') ||
+        message.contains('firebase.initializeapp') ||
+        message.contains('default app has not been created')) {
+      return 'Firebase no estaba inicializado al arrancar la app. Reinicia la app y vuelve a intentar.';
+    }
+
+    if (message.contains('network') ||
+        message.contains('socketexception') ||
+        message.contains('failed host lookup') ||
+        message.contains('connection refused') ||
+        message.contains('backend') ||
+        message.contains('timeout') ||
+        message.contains('timed out') ||
+        message.contains('failed to fetch') ||
+        message.contains('socket')) {
+      return 'No se pudo conectar con el servidor. Revisa internet o la URL del backend.';
+    }
+
+    if (message.contains('token inválido o expirado') ||
+        message.contains('id token') ||
+        message.contains('verify-token')) {
+      return 'El token de sesión no fue aceptado por el backend. Vuelve a iniciar sesión.';
+    }
+
+    return 'No se pudo iniciar sesión. Detalle: $detail';
+  }
+
+  String _normalizeErrorDetail(String? rawMessage) {
+    final raw = (rawMessage ?? '').trim();
+    if (raw.isEmpty) return 'error desconocido';
+
+    // Los errores de ApiClient llegan como "Exception: ...".
+    const prefix = 'Exception:';
+    if (raw.startsWith(prefix)) {
+      final cleaned = raw.substring(prefix.length).trim();
+      return cleaned.isEmpty ? 'error desconocido' : cleaned;
+    }
+    return raw;
+  }
+
+  String _normalizeRoleValue(dynamic value) {
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    if (text == 'psicologo' || text == 'psicóloga' || text == 'psicologa') {
+      return 'psicologo';
+    }
+    if (text == 'admin') return 'admin';
+    return 'usuario';
+  }
+
+  Future<void> _showLoginAlert({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color color,
+    required String actionLabel,
+  }) async {
+    if (!mounted) return;
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: title,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 50),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.18),
+                      blurRadius: 30,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: -12,
+                        bottom: -12,
+                        child: Transform.rotate(
+                          angle: -0.55,
+                          child: Container(
+                            width: 120,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -40,
+                        bottom: -54,
+                        child: Transform.rotate(
+                          angle: -0.56,
+                          child: Container(
+                            width: 240,
+                            height: 120,
+                            color: const Color(0xFFA68BC8),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        color: const Color(0xFFE8DFF2),
+                        padding: const EdgeInsets.fromLTRB(24, 72, 24, 28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title.toUpperCase(),
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.displayMedium.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              message,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.88,
+                                ),
+                                fontWeight: FontWeight.w700,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: color,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(),
+                                child: Text(actionLabel),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(color: Colors.white, width: 6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.14),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 54),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(
+              begin: 0.92,
+              end: 1.0,
+            ).animate(curvedAnimation),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.06),
+                end: Offset.zero,
+              ).animate(curvedAnimation),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -192,7 +523,7 @@ class _LoginScreenState extends State<LoginScreen>
                               child: Image.asset(
                                 'assets/images/logo.png',
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Icon(
+                                errorBuilder: (_, _, _) => const Icon(
                                   Icons.broken_image_outlined,
                                   color: AppColors.primary,
                                   size: 72,
@@ -366,7 +697,12 @@ class _LoginScreenState extends State<LoginScreen>
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () {},
+                                onPressed: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.forgotPassword,
+                                  );
+                                },
                                 child: Text(
                                   '¿Olvidaste tu contraseña?',
                                   style: AppTextStyles.bodySmall.copyWith(

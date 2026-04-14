@@ -1,3 +1,4 @@
+import 'screens/auth/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/app_theme.dart';
@@ -5,8 +6,10 @@ import 'routes/app_routes.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/autorizacion_padres_screen.dart';
 import 'screens/psicologo/home_psicologo_screen.dart';
 import 'screens/usuario/home_usuario_screen.dart';
+import 'screens/usuario/solicitar_cita_screen.dart';
 import 'screens/shared/perfil_screen.dart';
 
 class AurApp extends StatelessWidget {
@@ -30,8 +33,11 @@ class AurApp extends StatelessWidget {
         AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.login: (_) => const LoginScreen(),
         AppRoutes.register: (_) => const RegisterScreen(),
+        AppRoutes.autorizacionPadres: (_) => const AutorizacionPadresScreen(),
+        AppRoutes.forgotPassword: (_) => const ForgotPasswordScreen(),
         AppRoutes.homePsicologo: (_) => const HomePsicologoScreen(),
         AppRoutes.homeUsuario: (_) => const HomeUsuarioScreen(),
+        AppRoutes.solicitarCita: (_) => const SolicitarCitaScreen(),
         AppRoutes.perfil: (_) => const PerfilScreen(),
       },
     );

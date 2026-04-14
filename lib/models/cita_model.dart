@@ -1,57 +1,101 @@
-enum EstadoCita { pendiente, confirmada, cancelada, realizada }
+enum EstadoCita { pendiente, confirmada, cancelada }
 
 class CitaModel {
   final String id;
-  final String usuarioUid;
-  final String usuarioNombre;
-  final String psicologoUid;
-  final String psicologoNombre;
+  final String paciente;
+  final String psicologo;
   final DateTime fecha;
-  final String hora;
+  final String motivo;
   final EstadoCita estado;
-  final String? motivo;
-  final String? notas;
+  final String? pacienteUid;
+  final String? psicologoUid;
+  final String? pacienteDocumento;
+  final String? psicologoDocumento;
+  final DateTime? createdAt;
 
   const CitaModel({
     required this.id,
-    required this.usuarioUid,
-    required this.usuarioNombre,
-    required this.psicologoUid,
-    required this.psicologoNombre,
+    required this.paciente,
+    required this.psicologo,
     required this.fecha,
-    required this.hora,
+    required this.motivo,
     required this.estado,
-    this.motivo,
-    this.notas,
+    this.pacienteUid,
+    this.psicologoUid,
+    this.pacienteDocumento,
+    this.psicologoDocumento,
+    this.createdAt,
   });
 
   factory CitaModel.fromMap(String id, Map<String, dynamic> map) {
     return CitaModel(
       id: id,
-      usuarioUid: map['usuarioUid'] as String,
-      usuarioNombre: map['usuarioNombre'] as String? ?? '',
-      psicologoUid: map['psicologoUid'] as String,
-      psicologoNombre: map['psicologoNombre'] as String? ?? '',
-      fecha: DateTime.parse(map['fecha'] as String),
-      hora: map['hora'] as String,
+      paciente: _readString(map, const [
+        'paciente',
+        'pacienteNombre',
+        'usuarioNombre',
+        'usuario',
+      ]),
+      psicologo: _readString(map, const [
+        'psicologo',
+        'psicologoNombre',
+        'nombre_psicologo',
+      ]),
+      fecha:
+          _parseDate(map['fecha'] ?? map['Fecha'] ?? map['datetime']) ??
+          DateTime.now(),
+      motivo: _readString(map, const ['motivo', 'Motivo', 'reason']),
       estado: EstadoCita.values.firstWhere(
-        (e) => e.name == (map['estado'] as String? ?? 'pendiente'),
+        (estado) =>
+            estado.name ==
+            _readString(map, const ['estado', 'Estado']).toLowerCase(),
         orElse: () => EstadoCita.pendiente,
       ),
-      motivo: map['motivo'] as String?,
-      notas: map['notas'] as String?,
+      pacienteUid: _readString(map, const ['pacienteUid', 'usuarioUid']),
+      psicologoUid: _readString(map, const ['psicologoUid', 'uidPsicologo']),
+      pacienteDocumento: _readString(map, const [
+        'pacienteDocumento',
+        'documentoPaciente',
+      ]),
+      psicologoDocumento: _readString(map, const [
+        'psicologoDocumento',
+        'documentoPsicologo',
+      ]),
+      createdAt: _parseDate(map['createdAt'] ?? map['updatedAt']),
     );
   }
 
   Map<String, dynamic> toMap() => {
-    'usuarioUid': usuarioUid,
-    'usuarioNombre': usuarioNombre,
-    'psicologoUid': psicologoUid,
-    'psicologoNombre': psicologoNombre,
+    'paciente': paciente,
+    'psicologo': psicologo,
     'fecha': fecha.toIso8601String(),
-    'hora': hora,
+    'motivo': motivo,
     'estado': estado.name,
-    if (motivo != null) 'motivo': motivo,
-    if (notas != null) 'notas': notas,
+    if (pacienteUid != null && pacienteUid!.trim().isNotEmpty)
+      'pacienteUid': pacienteUid,
+    if (psicologoUid != null && psicologoUid!.trim().isNotEmpty)
+      'psicologoUid': psicologoUid,
+    if (pacienteDocumento != null && pacienteDocumento!.trim().isNotEmpty)
+      'pacienteDocumento': pacienteDocumento,
+    if (psicologoDocumento != null && psicologoDocumento!.trim().isNotEmpty)
+      'psicologoDocumento': psicologoDocumento,
+    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
   };
+
+  static String _readString(Map<String, dynamic>? map, List<String> keys) {
+    if (map == null) return '';
+    for (final key in keys) {
+      final value = map[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
 }

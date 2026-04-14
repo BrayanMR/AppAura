@@ -13,7 +13,8 @@ class AuthService {
     final data = await ApiClient.post('/api/auth/register', {
       'email': email,
       'password': password,
-      if (displayName != null) 'displayName': displayName,
+      if (displayName != null && displayName.trim().isNotEmpty)
+        'displayName': displayName.trim(),
     });
     return Map<String, dynamic>.from(data);
   }
@@ -56,7 +57,7 @@ class AuthService {
   }) async {
     final data = await ApiClient.post('/api/auth/custom-token', {
       'uid': uid,
-      if (claims != null) 'claims': claims,
+      if (claims != null && claims.isNotEmpty) 'claims': claims,
     });
     return data['customToken'] as String;
   }
