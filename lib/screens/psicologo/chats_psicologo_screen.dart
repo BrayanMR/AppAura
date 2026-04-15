@@ -925,10 +925,19 @@ class _PsychologistConversationPageState
   void _syncMessages(Map<String, dynamic> chat) {
     final rawMessages = chat['Mensajes'];
     if (rawMessages is List && rawMessages.isNotEmpty) {
+      final oldLast = _messages.isNotEmpty ? _messages.last : null;
       _messages
         ..clear()
         ..addAll(_mapMessages(chat));
       _saveLocalHistory();
+      // Scroll solo si llegó un mensaje nuevo
+      final newLast = _messages.isNotEmpty ? _messages.last : null;
+      if (oldLast != null &&
+          newLast != null &&
+          (oldLast.text != newLast.text ||
+              oldLast.timestamp != newLast.timestamp)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
       return;
     }
 
@@ -961,6 +970,11 @@ class _PsychologistConversationPageState
       }
     }
 
+    final wasAtBottom =
+        _scrollController.hasClients &&
+        (_scrollController.position.maxScrollExtent -
+                _scrollController.offset <=
+            20);
     _messages.add(
       _PsychChatMessage(
         text: text,
@@ -969,6 +983,9 @@ class _PsychologistConversationPageState
       ),
     );
     _saveLocalHistory();
+    if (wasAtBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
   }
 
   Future<void> _restoreLocalHistory() async {
@@ -1003,6 +1020,7 @@ class _PsychologistConversationPageState
           ..clear()
           ..addAll(restored);
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (_) {
       // Si falla lectura local, continúa flujo normal.
     }

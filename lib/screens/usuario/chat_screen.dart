@@ -24,6 +24,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final userId = _uidUsuario ?? _documentoUsuario;
     if (userId == null || userId.trim().isEmpty) {
       // Si no hay identificador, solo mensaje de bienvenida
+      if (!mounted) return;
       setState(() {
         _messages.clear();
         _messages.add(
@@ -41,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = await ChatIaService.getOrCreateUserChatIa(userId);
       final List<dynamic> msgs = data['messages'] ?? [];
       final String memory = data['memory'] ?? '';
+      if (!mounted) return;
       setState(() {
         _messages.clear();
         if (msgs.isNotEmpty) {
@@ -68,6 +70,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } catch (_) {
       // Si falla, solo mensaje de bienvenida
+      if (!mounted) return;
       setState(() {
         _messages.clear();
         _messages.add(
@@ -234,8 +237,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       _messageController.clear();
     });
-
-    _scrollToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     try {
       final triage = await MentalHealthTriageService.analyze(
@@ -244,7 +246,6 @@ class _ChatScreenState extends State<ChatScreen> {
         conversationMemory: _conversationMemory,
       );
       if (!mounted) return;
-
       setState(() {
         _lastTriage = triage;
         _messages.add(
@@ -256,11 +257,11 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
       await _syncConversationMemory(triage);
       // Guardar memoria IA después de actualizar _conversationMemory
       await _saveIaChatHistory();
-      _scrollToBottom();
       if (triage.crisis && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -284,13 +285,13 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } finally {
       if (mounted) {
         setState(() {
           _isSending = false;
         });
       }
-      _scrollToBottom();
     }
   }
 
@@ -326,6 +327,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isCreatingReferral = true;
     });
@@ -401,6 +403,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
+      if (!mounted) return;
       setState(() {
         _myChats
           ..clear()
@@ -408,11 +411,13 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } catch (error) {
       if (!mounted) return;
+      if (!mounted) return;
       setState(() {
         _chatsError = error.toString();
       });
     } finally {
       if (mounted) {
+        if (!mounted) return;
         setState(() {
           _isLoadingChats = false;
         });
@@ -740,6 +745,7 @@ class _ExistingChatPage extends StatefulWidget {
 }
 
 class _ExistingChatPageState extends State<_ExistingChatPage> {
+  // ...existing code...
   String _displayPsychologistName = '';
   @override
   void didChangeDependencies() {
@@ -749,12 +755,14 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
 
   void _resolveAndSetPsychologistName() {
     if (_displayPsychologistName.isNotEmpty) return;
+    if (!mounted) return;
     setState(() {
       _displayPsychologistName = widget.psychologistName;
     });
   }
 
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _threadMessages = <_ChatMessage>[];
   Timer? _pollingTimer;
   bool _loading = true;
@@ -781,6 +789,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
 
   void _startPolling() {
     _pollingTimer?.cancel();
+    // Forzar scroll al fondo cada vez que se construye la vista
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!mounted || _sending) return;
       _loadChat(showLoader: false);
@@ -806,6 +815,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
     } catch (error) {
       if (!mounted) return;
       if (showLoader) {
+        if (!mounted) return;
         setState(() {
           _error = error.toString();
         });
@@ -827,6 +837,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final optimisticTimestamp = DateTime.now();
 
+    if (!mounted) return;
     setState(() {
       _sending = true;
       _messageController.clear();
@@ -836,6 +847,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
       _lastMessageKey =
           '${optimisticTimestamp.toIso8601String()}|$currentUid|${text.toLowerCase()}';
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     try {
       await ChatService.updateChatMessage(
@@ -844,6 +856,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
         authorUid: currentUid,
         authorRole: 'usuario',
       );
+      if (!mounted) return;
       if (!mounted) return;
       setState(() {
         _chat['Mensaje'] = text;
@@ -857,6 +870,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
         ),
       );
     } catch (error) {
+      if (!mounted) return;
       if (!mounted) return;
       setState(() {
         if (_threadMessages.isNotEmpty) {
@@ -875,11 +889,23 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
       );
     } finally {
       if (mounted) {
+        if (!mounted) return;
         setState(() {
           _sending = false;
         });
       }
     }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   DateTime? _parseDate(dynamic value) {
@@ -923,6 +949,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
               })
               .where((msg) => msg.text.isNotEmpty),
         );
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       return;
     }
 
@@ -957,6 +984,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
     _threadMessages.add(
       _ChatMessage(text: text, isUser: isFromUser, timestamp: timestamp),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
@@ -986,6 +1014,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
                     Expanded(
                       child: _threadMessages.isEmpty
                           ? ListView(
+                              controller: _scrollController,
                               children: [
                                 _ChatBubble(
                                   message: _ChatMessage(
@@ -997,6 +1026,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
                               ],
                             )
                           : ListView.builder(
+                              controller: _scrollController,
                               itemCount: _threadMessages.length,
                               itemBuilder: (context, index) {
                                 return _ChatBubble(
@@ -1175,21 +1205,24 @@ class _ConversationPageState extends State<_ConversationPage> {
   }) {
     if (text.trim().isEmpty) return;
     if (_isDuplicateAssistantMessage(text)) return;
-
-    _messages.add(
-      _ChatMessage(
-        text: text,
-        isUser: false,
-        timestamp: DateTime.now(),
-        highlight: highlight,
-        isError: isError,
-      ),
-    );
+    setState(() {
+      _messages.add(
+        _ChatMessage(
+          text: text,
+          isUser: false,
+          timestamp: DateTime.now(),
+          highlight: highlight,
+          isError: isError,
+        ),
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   Future<void> _syncConversationMemory(MentalHealthTriageResult triage) async {
     final memory = triage.memory.trim();
     if (memory.isEmpty || memory == _conversationMemory.trim()) return;
+    if (!mounted) return;
     if (!mounted) return;
     setState(() {
       _conversationMemory = memory;
@@ -1556,6 +1589,7 @@ class _ConversationPageState extends State<_ConversationPage> {
     if (text.isEmpty || _isSending) return;
 
     if (!mounted) return;
+    if (!mounted) return;
     setState(() {
       _isSending = true;
       _messages.add(
@@ -1563,8 +1597,7 @@ class _ConversationPageState extends State<_ConversationPage> {
       );
       _messageController.clear();
     });
-
-    _scrollToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     // Si el usuario pide psicólogo de forma directa desde el primer mensaje,
     // crea/recupera la derivación y abre inmediatamente ese chat.
@@ -1583,6 +1616,7 @@ class _ConversationPageState extends State<_ConversationPage> {
           );
           if (!mounted) return;
           if (mounted) {
+            if (!mounted) return;
             setState(() {
               _lastTriage = triage;
             });
@@ -1599,6 +1633,7 @@ class _ConversationPageState extends State<_ConversationPage> {
 
         if (chatId != null) {
           if (mounted) {
+            if (!mounted) return;
             setState(() {
               _addAssistantMessage(
                 'Listo, te estoy conectando ahora mismo con el psicólogo.',
@@ -1656,6 +1691,7 @@ class _ConversationPageState extends State<_ConversationPage> {
       if (!mounted) return;
 
       if (mounted) {
+        if (!mounted) return;
         setState(() {
           _addAssistantMessage(
             chatId != null
@@ -1676,6 +1712,7 @@ class _ConversationPageState extends State<_ConversationPage> {
         await _openPsychologistChat(chatId);
       }
       if (mounted) {
+        if (!mounted) return;
         setState(() {
           _isSending = false;
         });
@@ -1785,6 +1822,7 @@ class _ConversationPageState extends State<_ConversationPage> {
       return null;
     }
 
+    if (!mounted) return null;
     setState(() {
       _isCreatingReferral = true;
     });
@@ -1968,6 +2006,15 @@ class _ConversationPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (controller.hasClients && messages.isNotEmpty) {
+        controller.animateTo(
+          controller.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+        );
+      }
+    });
     return Column(
       children: [
         Expanded(
@@ -2117,7 +2164,7 @@ class _ChatBubble extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              DateFormat('HH:mm').format(message.timestamp),
+              DateFormat('HH:mm').format(message.timestamp.toLocal()),
               style: AppTextStyles.caption.copyWith(
                 color: textColor.withOpacity(0.75),
               ),

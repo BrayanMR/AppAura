@@ -8,11 +8,12 @@ class ForoPsicologoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ForoScreen(
+    return ForoScreen(
       title: 'Foro',
       subtitle: 'Comparte recursos y guía a tus pacientes desde aquí.',
       accentColor: AppColors.rolePsicologo,
       heroIcon: Icons.forum_outlined,
+      userRole: 'psicologo',
     );
   }
 }

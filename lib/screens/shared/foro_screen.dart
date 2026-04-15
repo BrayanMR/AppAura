@@ -5,11 +5,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../services/foro_service.dart';
 
+import '../../widgets/crear_publicacion_modal.dart';
+
 class ForoScreen extends StatefulWidget {
   final String title;
   final String subtitle;
   final Color accentColor;
   final IconData heroIcon;
+  final String? userRole;
 
   const ForoScreen({
     super.key,
@@ -17,6 +20,7 @@ class ForoScreen extends StatefulWidget {
     required this.subtitle,
     required this.accentColor,
     this.heroIcon = Icons.forum_outlined,
+    this.userRole,
   });
 
   @override
@@ -64,7 +68,7 @@ class _ForoScreenState extends State<ForoScreen> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Fecha reciente';
-    return DateFormat('dd/MM/yyyy • HH:mm').format(date);
+    return DateFormat('dd/MM/yyyy • HH:mm').format(date.toLocal());
   }
 
   Future<void> _toggleLikeFromFeed(
@@ -108,6 +112,7 @@ class _ForoScreenState extends State<ForoScreen> {
   @override
   Widget build(BuildContext context) {
     final actorId = _actorId(context);
+    final userRole = widget.userRole;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -213,6 +218,28 @@ class _ForoScreenState extends State<ForoScreen> {
           ],
         ),
       ),
+      floatingActionButton: userRole == 'psicologo'
+          ? FloatingActionButton.extended(
+              backgroundColor: widget.accentColor,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Nueva publicación',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: () async {
+                final result = await showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) =>
+                      CrearPublicacionModal(accentColor: widget.accentColor),
+                );
+                if (result == true && mounted) {
+                  _reload(forceRefresh: true);
+                }
+              },
+            )
+          : null,
     );
   }
 
@@ -418,6 +445,7 @@ class _CommentComposerSheetState extends State<_CommentComposerSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TextField(
                   controller: _commentController,
+                  maxLength: 200,
                   maxLines: 4,
                   minLines: 3,
                   textInputAction: TextInputAction.newline,

@@ -198,6 +198,26 @@ class ForoPublicacion {
 }
 
 class ForoService {
+  /// Agrega una nueva publicación al foro
+  static Future<void> crearPublicacion({
+    required String autor,
+    required String rol,
+    required String titulo,
+    required String contenido,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final doc = <String, dynamic>{
+      'autor': autor,
+      'rol': rol,
+      'titulo': titulo,
+      'contenido': contenido,
+      'fecha': now.toIso8601String(),
+      'updatedAt': now.toIso8601String(),
+      'comentarios': [],
+    };
+    await FirestoreService.addDocument('ForoPublicaciones', doc);
+  }
+
   ForoService._();
 
   static const List<String> _collections = <String>[
