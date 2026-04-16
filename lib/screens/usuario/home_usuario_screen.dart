@@ -2,7 +2,11 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/firestore_service.dart';
+import '../../services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../routes/app_routes.dart';
@@ -20,6 +24,33 @@ class HomeUsuarioScreen extends StatefulWidget {
 
 class _HomeUsuarioScreenState extends State<HomeUsuarioScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserActivo();
+  }
+
+  Future<void> _checkUserActivo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final profile = await FirestoreService.getDocument('usuarios', user.uid);
+      final activo =
+          profile['activo'] == true ||
+          profile['activo'] == 'true' ||
+          profile['activo'] == 1;
+      if (!activo && mounted) {
+        await AuthService.signOut();
+        await FirebaseAuth.instance.signOut();
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.login,
+          (route) => false,
+        );
+      }
+    } catch (_) {}
+  }
 
   Widget _buildCurrentTab() {
     switch (_currentIndex) {

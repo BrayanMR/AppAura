@@ -271,6 +271,7 @@ class _ForoScreenState extends State<ForoScreen> {
     ForoPublicacion publicacion,
     String authorName,
   ) async {
+    final actorUid = _actorId(context);
     final commentText = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -304,6 +305,7 @@ class _ForoScreenState extends State<ForoScreen> {
         publicacion: publicacion,
         autor: authorName,
         texto: text,
+        autorUid: actorUid,
       );
 
       if (!mounted) return;

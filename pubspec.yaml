@@ -49,6 +49,7 @@ dependencies:
   flutter_local_notifications: ^19.2.1
   file_picker: ^8.1.7
   url_launcher: ^6.3.2
+  cloud_firestore: ^6.3.0
 
 dev_dependencies:
   flutter_test:

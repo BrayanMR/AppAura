@@ -3,6 +3,7 @@ import 'firestore_service.dart';
 class ForoComentario {
   final String autor;
   final String texto;
+  final String? autorUid;
   final DateTime? fecha;
   final bool reportado;
   final String? respuestaTexto;
@@ -10,6 +11,7 @@ class ForoComentario {
   const ForoComentario({
     required this.autor,
     required this.texto,
+    this.autorUid,
     required this.fecha,
     required this.reportado,
     this.respuestaTexto,
@@ -17,7 +19,6 @@ class ForoComentario {
 
   factory ForoComentario.fromMap(Map<String, dynamic> map) {
     final respuestas = map['respuestas'];
-
     return ForoComentario(
       autor: _stringFrom(map, const [
         'autor',
@@ -31,6 +32,7 @@ class ForoComentario {
         'comentario',
         'mensaje',
       ]),
+      autorUid: map['autorUid'] as String?,
       fecha: _safeParseDate(
         _firstValue(map, const ['fecha', 'createdAt', 'updatedAt']),
       ),
@@ -48,17 +50,17 @@ class ForoComentario {
       'texto': texto,
       'reportado': reportado,
     };
-
+    if (autorUid != null && autorUid!.isNotEmpty) {
+      data['autorUid'] = autorUid;
+    }
     if (fecha != null) {
       data['fecha'] = fecha!.toIso8601String();
     }
-
     if (respuestaTexto != null && respuestaTexto!.trim().isNotEmpty) {
       data['respuestas'] = <String, dynamic>{'texto': respuestaTexto};
     } else {
       data['respuestas'] = <String, dynamic>{};
     }
-
     return data;
   }
 }
@@ -166,8 +168,9 @@ class ForoPublicacion {
   Map<String, dynamic> comentariosToPayload(
     List<ForoComentario> comentariosActualizados,
   ) {
+    // Forzar el nombre del campo a 'Comentarios' para compatibilidad backend
     return {
-      comentariosKey: comentariosActualizados
+      'Comentarios': comentariosActualizados
           .map((comentario) => comentario.toMap())
           .toList(),
     };
@@ -305,12 +308,14 @@ class ForoService {
     required ForoPublicacion publicacion,
     required String autor,
     required String texto,
+    String? autorUid,
   }) async {
     final comentariosActuales =
         List<ForoComentario>.from(publicacion.comentarios)..add(
           ForoComentario(
             autor: autor,
             texto: texto,
+            autorUid: autorUid,
             fecha: DateTime.now(),
             reportado: false,
           ),

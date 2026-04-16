@@ -12,7 +12,10 @@ router.get('/', async (req, res) => {
       .orderBy('Fecha_publicacion', 'desc')
       .get();
 
-    const publicaciones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const publicaciones = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { id: doc.id, ...data, comentarios: data.Comentarios || [] };
+    });
     res.json(publicaciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -41,7 +44,8 @@ router.get('/:id', async (req, res) => {
   try {
     const doc = await getFirestore().collection('Publicaciones').doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Publicación no encontrada' });
-    res.json({ id: doc.id, ...doc.data() });
+    const data = doc.data();
+    res.json({ id: doc.id, ...data, comentarios: data.Comentarios || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -80,7 +84,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // Body: { autor, texto }
 router.post('/:id/comentario', authMiddleware, async (req, res) => {
   try {
-    const { autor, texto } = req.body;
+    const { autor, texto, autorUid } = req.body;
     if (!autor || !texto) return res.status(400).json({ error: 'Se requieren autor y texto' });
 
     const docRef = getFirestore().collection('Publicaciones').doc(req.params.id);
@@ -88,7 +92,11 @@ router.post('/:id/comentario', authMiddleware, async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Publicación no encontrada' });
 
     const comentarios = doc.data().Comentarios || [];
-    comentarios.push({ autor, texto, fecha: new Date().toISOString() });
+    const nuevoComentario = { autor, texto, fecha: new Date().toISOString() };
+    if (autorUid) {
+      nuevoComentario.autorUid = autorUid;
+    }
+    comentarios.push(nuevoComentario);
 
     await docRef.update({ Comentarios: comentarios });
     res.json({ updated: true, total_comentarios: comentarios.length });
