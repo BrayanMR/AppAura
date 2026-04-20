@@ -24,11 +24,25 @@ class HomeUsuarioScreen extends StatefulWidget {
 
 class _HomeUsuarioScreenState extends State<HomeUsuarioScreen> {
   int _currentIndex = 0;
+  Timer? _activoTimer;
 
   @override
   void initState() {
     super.initState();
     _checkUserActivo();
+    _startActivoPolling();
+  }
+
+  @override
+  void dispose() {
+    _activoTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startActivoPolling() {
+    _activoTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkUserActivo();
+    });
   }
 
   Future<void> _checkUserActivo() async {

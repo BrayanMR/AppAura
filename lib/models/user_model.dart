@@ -13,6 +13,7 @@ class UserModel {
   final UserRole role;
   final String? imagenUrl;
   final String? reporte;
+  final bool activo;
   final DateTime? createdAt;
 
   const UserModel({
@@ -27,6 +28,7 @@ class UserModel {
     this.edad,
     this.imagenUrl,
     this.reporte,
+    this.activo = true,
     this.createdAt,
   });
 
@@ -54,6 +56,10 @@ class UserModel {
       edad: map['edad'] as int?,
       imagenUrl: map['imagenUrl'] as String?,
       reporte: map['reporte'] as String?,
+      activo:
+          map['activo'] == true ||
+          map['activo'] == 'true' ||
+          map['activo'] == 1,
       createdAt: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'] as String)
           : null,
@@ -72,6 +78,7 @@ class UserModel {
       'fechaNacimiento': fechaNacimiento!.toIso8601String(),
     if (edad != null) 'edad': edad,
     if (imagenUrl != null) 'imagenUrl': imagenUrl,
+    'activo': activo,
     if (reporte != null) 'reporte': reporte,
     if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
   };
@@ -84,7 +91,7 @@ class UserModel {
     DateTime? fechaNacimiento,
     int? edad,
     String? imagenUrl,
-    String? reporte,
+    bool? activo,
   }) {
     return UserModel(
       uid: uid,
@@ -98,6 +105,7 @@ class UserModel {
       edad: edad ?? this.edad,
       imagenUrl: imagenUrl ?? this.imagenUrl,
       reporte: reporte ?? this.reporte,
+      activo: activo ?? this.activo,
       createdAt: createdAt,
     );
   }

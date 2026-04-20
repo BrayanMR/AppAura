@@ -161,8 +161,6 @@ class _LoginScreenState extends State<LoginScreen>
         },
       );
     } catch (e) {
-      // Manejo de errores
-      setState(() => _loading = false);
       if (mounted) {
         await _showLoginAlert(
           title: 'No se pudo iniciar sesión',
@@ -172,8 +170,9 @@ class _LoginScreenState extends State<LoginScreen>
           actionLabel: 'Entendido',
         );
       }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    setState(() => _loading = false);
   }
 
   String _loginErrorMessage(String? code, String? rawMessage) {
