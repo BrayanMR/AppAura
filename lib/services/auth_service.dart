@@ -25,6 +25,12 @@ class AuthService {
     return Map<String, dynamic>.from(data);
   }
 
+  // ── Obtener usuario autenticado ─────────────────────────────────────────────
+  static Future<Map<String, dynamic>> getCurrentUser() async {
+    final data = await ApiClient.get('/api/auth/me', auth: true);
+    return Map<String, dynamic>.from(data);
+  }
+
   // ── Actualizar usuario ───────────────────────────────────────────────────
   static Future<Map<String, dynamic>> updateUser(
     String uid,
@@ -47,6 +53,23 @@ class AuthService {
     });
     // Guardar el token para peticiones autenticadas
     await ApiClient.saveToken(idToken);
+    return Map<String, dynamic>.from(data);
+  }
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+  }) async {
+    final data = await ApiClient.post('/api/auth/login', {
+      'email': email,
+      'password': password,
+    });
+    final token = data['token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('No se pudo obtener el token JWT del backend');
+    }
+    await ApiClient.saveToken(token);
     return Map<String, dynamic>.from(data);
   }
 

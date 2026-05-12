@@ -43,6 +43,7 @@ class ApiClient {
         debugPrint('[HEADERS] Auth header agregado');
       } else {
         debugPrint('[HEADERS] ⚠️ Auth solicitado pero no hay token');
+        throw Exception('No se encontró token de autenticación. Inicia sesión de nuevo.');
       }
     }
     return headers;

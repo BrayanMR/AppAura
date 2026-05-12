@@ -3,6 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../routes/app_routes.dart';
 import '../../models/cita_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
 import '../../services/cita_service.dart';
 import '../../services/foro_service.dart';
@@ -141,9 +142,17 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
   }
 
   Future<_DashboardStats> _loadStats() async {
+    var documento = widget.documentoUsuario;
+    if ((documento == null || documento.trim().isEmpty) &&
+        widget.uid != null &&
+        widget.uid!.isNotEmpty) {
+      final currentUser = await AuthService.getCurrentUser();
+      documento = currentUser['documento']?.toString().trim();
+    }
+
     final chats = await ChatService.fetchChats(
       uid: widget.uid,
-      documento: widget.documentoUsuario,
+      documento: documento,
     );
 
     final pacientes = <String>{};

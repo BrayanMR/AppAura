@@ -1174,6 +1174,24 @@ class _ConversationPageState extends State<_ConversationPage> {
         normalized.contains('del tema');
   }
 
+  String? _extractNameFromMemory(String memory) {
+    final lines = memory
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    for (final line in lines) {
+      final lowered = line.toLowerCase();
+      if (lowered.startsWith('nombre:') || lowered.startsWith('name:')) {
+        final name = line.split(':').sublist(1).join(':').trim();
+        if (name.isNotEmpty) return name;
+      }
+    }
+
+    return null;
+  }
+
   bool _areTextsTooSimilar(String a, String b) {
     final normalize = (String value) => value
         .toLowerCase()
@@ -1297,10 +1315,12 @@ class _ConversationPageState extends State<_ConversationPage> {
             );
 
             if (_messages.isEmpty) {
+              final name =
+                  _extractNameFromMemory(legacyMemory) ?? widget.nombreUsuario;
               _messages.add(
                 _ChatMessage(
                   text:
-                      'Hola ${widget.nombreUsuario}. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
+                      'Hola $name. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
                   isUser: false,
                   timestamp: DateTime.now(),
                 ),
@@ -1331,10 +1351,11 @@ class _ConversationPageState extends State<_ConversationPage> {
         }
 
         if (_messages.isEmpty) {
+          final name = _extractNameFromMemory(memory) ?? widget.nombreUsuario;
           _messages.add(
             _ChatMessage(
               text:
-                  'Hola ${widget.nombreUsuario}. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
+                  'Hola $name. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -1349,12 +1370,14 @@ class _ConversationPageState extends State<_ConversationPage> {
       debugPrint(st.toString());
       if (!mounted) return;
       setState(() {
+        final name =
+            _extractNameFromMemory(_conversationMemory) ?? widget.nombreUsuario;
         _messages
           ..clear()
           ..add(
             _ChatMessage(
               text:
-                  'Hola ${widget.nombreUsuario}. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
+                  'Hola $name. Cuéntame cómo te sientes y yo te ayudo a orientarte. Si detecto que necesitas apoyo profesional, te conecto con un psicólogo adecuado.',
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -1430,6 +1453,17 @@ class _ConversationPageState extends State<_ConversationPage> {
     return confirmations.any(normalized.contains);
   }
 
+  bool _isReferralAffirmation(String text) {
+    final normalized = text
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^a-záéíóúüñ]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return normalized == 'si' || normalized == 'sí';
+  }
+
   bool _isNegativePsychologistRequest(String text) {
     final normalized = text.toLowerCase().trim();
     if (normalized.isEmpty) return false;
@@ -1494,9 +1528,25 @@ class _ConversationPageState extends State<_ConversationPage> {
       'necesito hablar con una persona',
       'necesito un psicologo',
       'necesito un psicólogo',
+      'quiero ayuda profesional',
+      'quiero ayuda de un psicologo',
+      'quiero ayuda de un psicólogo',
+      'quiero ayuda con psicologo',
+      'quiero ayuda con psicólogo',
+      'necesito ayuda profesional',
+      'necesito ayuda de un psicologo',
+      'necesito ayuda de un psicólogo',
+      'ayuda de psicologo',
+      'ayuda de un psicologo',
+      'ayuda de psicólogo',
+      'ayuda de un psicólogo',
     ];
 
-    return directRequests.any(normalized.contains);
+    if (directRequests.any(normalized.contains)) {
+      return true;
+    }
+
+    return normalized.contains('ayuda') && normalized.contains('psicolog');
   }
 
   bool _shouldSuggestReferral(
@@ -1613,6 +1663,7 @@ class _ConversationPageState extends State<_ConversationPage> {
             text,
             recentConversation: _recentConversationContext(),
             conversationMemory: _conversationMemory,
+            forceMatchPsychologist: true,
           );
           if (!mounted) return;
           if (mounted) {
@@ -1686,7 +1737,9 @@ class _ConversationPageState extends State<_ConversationPage> {
       return;
     }
 
-    if (_isReferralConfirmation(text) && _lastTriage?.psychologist != null) {
+    if ((_isReferralConfirmation(text) ||
+            (_hasSuggestedReferral && _isReferralAffirmation(text))) &&
+        _lastTriage?.psychologist != null) {
       final chatId = await _createReferral();
       if (!mounted) return;
 
@@ -1757,7 +1810,7 @@ class _ConversationPageState extends State<_ConversationPage> {
           if (shouldOfferReferral) {
             _hasSuggestedReferral = true;
             _addAssistantMessage(
-              'Si quieres que te conecte ahora mismo con el psicólogo recomendado, respóndeme: "confirmo derivación" o "sí, conéctame".',
+              'Si quieres que te conecte ahora mismo con el psicólogo recomendado, respóndeme: "confirmo derivación", "sí" o "sí, conéctame".',
             );
           }
         });

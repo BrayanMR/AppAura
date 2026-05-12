@@ -4,7 +4,7 @@ class AppColors {
   AppColors._();
 
   // ── Paleta principal ──────────────────────────────────────────────────────
-  static const Color primary = Color(0xFF6366F1);
+  static const Color primary = Color.fromARGB(255, 165, 133, 200);
   static const Color primaryDark = Color.fromARGB(255, 165, 133, 200);
   static const Color primaryLight = Color(0xFF818CF8);
 

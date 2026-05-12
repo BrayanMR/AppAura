@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -807,6 +805,28 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
       firstDate: DateTime.now().subtract(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
       locale: const Locale('es', 'ES'),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            secondary: AppColors.secondary,
+            onSecondary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textPrimary,
+            outline: AppColors.primary,
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
+          dialogTheme: DialogThemeData(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+        child: child!,
+      ),
     );
     if (picked == null) return;
 
@@ -820,7 +840,44 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
     final parsed =
         _parseTime(_horaCtrl.text.trim()) ??
         const TimeOfDay(hour: 9, minute: 0);
-    final picked = await showTimePicker(context: context, initialTime: parsed);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: parsed,
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          useMaterial3: true,
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textPrimary,
+            outline: AppColors.primary,
+          ),
+          timePickerTheme: TimePickerThemeData(
+            dialHandColor: AppColors.primary,
+            dialBackgroundColor: Colors.white,
+            hourMinuteColor: AppColors.primary.withOpacity(0.15),
+            hourMinuteTextColor: AppColors.textPrimary,
+            dayPeriodColor: Colors.white,
+            dayPeriodTextColor: AppColors.textPrimary,
+            dayPeriodBorderSide: BorderSide(color: AppColors.primary.withOpacity(0.24)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          dialogTheme: DialogThemeData(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
+        ),
+        child: child!,
+      ),
+    );
     if (picked == null) return;
 
     final hh = picked.hour.toString().padLeft(2, '0');

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
 
 class PacientesScreen extends StatefulWidget {
@@ -45,6 +46,13 @@ class _PacientesScreenState extends State<PacientesScreen> {
           ? widget.uid!.trim()
           : FirebaseAuth.instance.currentUser?.uid;
       _psychologistDocument = widget.documentoUsuario?.trim();
+
+      if ((_psychologistDocument == null || _psychologistDocument!.isEmpty) &&
+          _psychologistUid != null &&
+          _psychologistUid!.isNotEmpty) {
+        final currentUser = await AuthService.getCurrentUser();
+        _psychologistDocument = currentUser['documento']?.toString().trim();
+      }
 
       if ((_psychologistUid == null || _psychologistUid!.isEmpty) &&
           (_psychologistDocument == null || _psychologistDocument!.isEmpty)) {

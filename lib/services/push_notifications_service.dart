@@ -79,7 +79,7 @@ class PushNotificationsService {
     );
     const settings = InitializationSettings(android: androidSettings);
 
-    await _localNotifications.initialize(settings);
+    await _localNotifications.initialize(settings: settings);
 
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
@@ -119,10 +119,10 @@ class PushNotificationsService {
     );
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title ?? 'AurApp',
-      body ?? 'Tienes una nueva notificación',
-      NotificationDetails(android: androidDetails),
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: title ?? 'AurApp',
+      body: body ?? 'Tienes una nueva notificación',
+      notificationDetails: NotificationDetails(android: androidDetails),
     );
   }
 

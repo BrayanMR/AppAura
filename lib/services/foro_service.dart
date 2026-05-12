@@ -99,17 +99,28 @@ class ForoPublicacion {
   });
 
   factory ForoPublicacion.fromMap(String collection, Map<String, dynamic> map) {
-    final rawComentarios =
-        map['comentarios'] ?? map['Comentarios'] ?? map['comments'];
-    final comentarios = rawComentarios is List
-        ? rawComentarios
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    ForoComentario.fromMap(Map<String, dynamic>.from(item)),
-              )
-              .toList()
-        : <ForoComentario>[];
+    dynamic rawComentarios = map['comentarios'];
+    final rawComentariosAlt = map['Comentarios'] ?? map['comments'];
+    if (!_hasNonEmptyComments(rawComentarios) &&
+        _hasNonEmptyComments(rawComentariosAlt)) {
+      rawComentarios = rawComentariosAlt;
+    }
+
+    final comentarios = <ForoComentario>[];
+
+    if (rawComentarios is List) {
+      comentarios.addAll(
+        rawComentarios.whereType<Map>().map(
+          (item) => ForoComentario.fromMap(Map<String, dynamic>.from(item)),
+        ),
+      );
+    } else if (rawComentarios is Map) {
+      comentarios.addAll(
+        rawComentarios.values.whereType<Map>().map(
+          (item) => ForoComentario.fromMap(Map<String, dynamic>.from(item)),
+        ),
+      );
+    }
 
     return ForoPublicacion(
       collection: collection,
@@ -168,12 +179,15 @@ class ForoPublicacion {
   Map<String, dynamic> comentariosToPayload(
     List<ForoComentario> comentariosActualizados,
   ) {
-    // Forzar el nombre del campo a 'Comentarios' para compatibilidad backend
-    return {
+    // Forzar los nombres de campo más comunes para compatibilidad en Firestore.
+    final Map<String, dynamic> payload = {
       'Comentarios': comentariosActualizados
           .map((comentario) => comentario.toMap())
           .toList(),
     };
+    // También exportamos la versión lowercase por si el documento usó ese formato.
+    payload['comentarios'] = payload['Comentarios'];
+    return payload;
   }
 
   ForoPublicacion copyWith({
@@ -298,7 +312,7 @@ class ForoService {
     }
 
     if (lastError != null) {
-      throw lastError!;
+      throw lastError;
     }
 
     return <ForoPublicacion>[];
@@ -485,6 +499,16 @@ int _intFrom(dynamic value) {
     return int.tryParse(value.trim()) ?? 0;
   }
   return 0;
+}
+
+bool _hasNonEmptyComments(dynamic comments) {
+  if (comments is List) {
+    return comments.isNotEmpty;
+  }
+  if (comments is Map) {
+    return comments.isNotEmpty;
+  }
+  return false;
 }
 
 List<String> _stringListFrom(dynamic value) {

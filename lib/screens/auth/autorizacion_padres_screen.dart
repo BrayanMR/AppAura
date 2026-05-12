@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:file_picker/file_picker.dart';
 import '../../config/firebase_initializer.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -68,9 +67,9 @@ class _AutorizacionPadresScreenState extends State<AutorizacionPadresScreen> {
   }
 
   Future<void> _seleccionarDocumento() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
       withData: true,
     );
 

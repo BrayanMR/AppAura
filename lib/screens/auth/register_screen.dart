@@ -197,7 +197,10 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       final requiereAutorizacion = edad < 18;
 
-      // ✅ GUARDAR EN FIRESTORE (no depende de login en cliente)
+      // 🔐 Obtener JWT del backend antes de escribir en Firestore vía API
+      await AuthService.login(email: email, password: password);
+
+      // ✅ GUARDAR EN FIRESTORE (requiere token JWT de backend)
       await FirestoreService.setDocument('usuarios', uid, {
         'uid': uid,
         'nombre': nombre,
@@ -209,7 +212,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         'edad': edad,
         'imagenUrl': '',
         'reporte': '',
-        'role': 'usuario',
+        'role': 'paciente',
         'activo': false,
         'autorizacionPadres': {
           'estado': requiereAutorizacion

@@ -12,6 +12,7 @@ class AppRoutes {
   static const String pacientes = '/psicologo/pacientes';
   static const String citasPsicologo = '/psicologo/citas';
   static const String notasClinicas = '/psicologo/notas';
+  static const String crearNotaClinica = '/psicologo/crear-nota';
   static const String foroPsicologo = '/psicologo/foro';
 
   // Usuario

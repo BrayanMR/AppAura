@@ -1,4 +1,5 @@
-﻿import 'api_client.dart';
+﻿import 'package:flutter/foundation.dart';
+import 'api_client.dart';
 import 'firestore_service.dart';
 
 class MentalHealthTriageResult {
@@ -204,6 +205,7 @@ class MentalHealthTriageService {
     List<Map<String, String>> recentConversation =
         const <Map<String, String>>[],
     String conversationMemory = '',
+    bool forceMatchPsychologist = false,
   }) async {
     final normalizedInput = _normalizeAndCorrect(message);
 
@@ -215,7 +217,7 @@ class MentalHealthTriageService {
         recentConversation,
       );
       final reply = (rememberedName != null && rememberedName.trim().isNotEmpty)
-          ? 'Sí, me dijiste que te llamas .'
+          ? 'Sí, me dijiste que te llamas ${rememberedName.trim()}.'
           : 'Aún no tengo tu nombre guardado con claridad. Dime \"me llamo ...\" y lo recuerdo.';
 
       return MentalHealthTriageResult(
@@ -254,7 +256,7 @@ class MentalHealthTriageService {
         reply: reply,
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
-        memory: _mergeMemory(conversationMemory, message),
+        memory: conversationMemory,
         emotions: const EmotionsAnalysis(primary: 'neutral', intensity: 0.3),
         therapies: const [
           TherapyRecommendation(
@@ -275,18 +277,19 @@ class MentalHealthTriageService {
     // Si el usuario comparte su nombre, confirmamos y lo guardamos de inmediato.
     final introducedName = _extractNameFromMessage(message);
     if (introducedName != null && introducedName.isNotEmpty) {
+      final template = _pickResponseVariant(
+        [
+          'Gracias por contármelo, . Ya lo guardé y lo voy a recordar en nuestras siguientes conversaciones.',
+          'Listo, . Ya registré tu nombre y lo tendré presente en adelante.',
+          'Perfecto, . Ya quedó guardado y voy a recordarlo para acompañarte mejor.',
+        ],
+        message,
+        recentConversation,
+      );
       return MentalHealthTriageResult(
         category: 'general',
         label: 'dato personal guardado',
-        reply: _pickResponseVariant(
-          [
-            'Gracias por contármelo, . Ya lo guardé y lo voy a recordar en nuestras siguientes conversaciones.',
-            'Listo, . Ya registré tu nombre y lo tendré presente en adelante.',
-            'Perfecto, . Ya quedó guardado y voy a recordarlo para acompañarte mejor.',
-          ],
-          message,
-          recentConversation,
-        ),
+        reply: _insertValue(template, introducedName),
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
         memory: _mergeMemory(conversationMemory, message),
@@ -309,18 +312,19 @@ class MentalHealthTriageService {
 
     final introducedProfession = _extractProfessionFromMessage(message);
     if (introducedProfession != null && introducedProfession.isNotEmpty) {
+      final template = _pickResponseVariant(
+        [
+          'Perfecto, ya guardé tu profesión: . La voy a recordar para las siguientes conversaciones.',
+          'Listo, ya registré que te dedicas a: . Lo tendré en cuenta en adelante.',
+          'Genial, ya quedó guardada tu profesión () y la recordaré para próximas charlas.',
+        ],
+        message,
+        recentConversation,
+      );
       return MentalHealthTriageResult(
         category: 'general',
         label: 'dato personal guardado',
-        reply: _pickResponseVariant(
-          [
-            'Perfecto, ya guardé tu profesión: . La voy a recordar para las siguientes conversaciones.',
-            'Listo, ya registré que te dedicas a: . Lo tendré en cuenta en adelante.',
-            'Genial, ya quedó guardada tu profesión () y la recordaré para próximas charlas.',
-          ],
-          message,
-          recentConversation,
-        ),
+        reply: _insertValue(template, introducedProfession),
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
         memory: _mergeMemory(conversationMemory, message),
@@ -343,18 +347,20 @@ class MentalHealthTriageService {
 
     final introducedHobbies = _extractHobbiesFromMessage(message);
     if (introducedHobbies.isNotEmpty) {
+      final hobbiesText = introducedHobbies.join(', ');
+      final template = _pickResponseVariant(
+        [
+          'Listo, ya guardé tus hobbies: . Los voy a tener en cuenta en adelante.',
+          'Perfecto, anoté tus hobbies (). Los recordaré para próximas conversaciones.',
+          'Gracias, ya registré eso que te gusta ().',
+        ],
+        message,
+        recentConversation,
+      );
       return MentalHealthTriageResult(
         category: 'general',
         label: 'dato personal guardado',
-        reply: _pickResponseVariant(
-          [
-            'Listo, ya guardé tus hobbies: . Los voy a tener en cuenta en adelante.',
-            'Perfecto, anoté tus hobbies (). Los recordaré para próximas conversaciones.',
-            'Gracias, ya registré eso que te gusta ().',
-          ],
-          message,
-          recentConversation,
-        ),
+        reply: _insertValue(template, hobbiesText),
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
         memory: _mergeMemory(conversationMemory, message),
@@ -481,8 +487,8 @@ class MentalHealthTriageService {
       // Buscar psicólogo si es necesario
       final crisisValue = _parseBool(responseMap['crisis'], false);
       PsychologistMatch? psychologist;
-      if (responseMap['category']?.toString().toLowerCase() != 'general' &&
-          !crisisValue) {
+      if (forceMatchPsychologist ||
+          responseMap['category']?.toString().toLowerCase() != 'general') {
         psychologist = await _findMatchingPsychologist(
           responseMap['recommendedSpecialty']?.toString() ??
               'Bienestar emocional',
@@ -505,13 +511,16 @@ class MentalHealthTriageService {
         metrics: triageMetrics,
         psychologist: psychologist,
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[IA][ERROR] $e');
+      debugPrint(st.toString());
       // Fallback en caso de error
+      final errorMessage = e?.toString() ?? 'error desconocido';
       return MentalHealthTriageResult(
         category: 'general',
         label: 'error temporal',
         reply:
-            'Lo siento, tuve un problema técnico. ¿Puedes repetir lo que me decías?',
+            'Lo siento, no pude conectar con el servicio de IA: $errorMessage. Verifica el backend y vuelve a intentarlo.',
         recommendedSpecialty: 'Bienestar emocional',
         crisis: false,
         memory: conversationMemory,
@@ -570,6 +579,9 @@ class MentalHealthTriageService {
   static Future<PsychologistMatch?> _findMatchingPsychologist(
     String specialty,
   ) async {
+    final normalizedSpecialty = _normalizeSpecialty(specialty);
+    PsychologistMatch? fallback;
+
     for (final collection in _collections) {
       try {
         final docs = await FirestoreService.query(
@@ -583,8 +595,9 @@ class MentalHealthTriageService {
           final data = doc as Map<String, dynamic>;
           final specialties =
               data['especialidades'] ?? data['specialties'] ?? [];
-          if (specialties is List && specialties.contains(specialty)) {
-            return PsychologistMatch(
+
+          if (fallback == null) {
+            fallback = PsychologistMatch(
               collection: collection,
               id: doc['id'] ?? '',
               uid: data['uid'] ?? '',
@@ -595,12 +608,47 @@ class MentalHealthTriageService {
               raw: data,
             );
           }
+
+          if (specialties is List) {
+            for (final item in specialties) {
+              final specialtyValue = item?.toString() ?? '';
+              if (specialtyValue.trim().isEmpty) continue;
+
+              final normalizedItem = _normalizeSpecialty(specialtyValue);
+              if (normalizedItem == normalizedSpecialty ||
+                  normalizedItem.contains(normalizedSpecialty) ||
+                  normalizedSpecialty.contains(normalizedItem)) {
+                return PsychologistMatch(
+                  collection: collection,
+                  id: doc['id'] ?? '',
+                  uid: data['uid'] ?? '',
+                  documento: data['documento'] ?? '',
+                  name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
+                  specialty: specialty,
+                  phone: data['telefono'] ?? data['phone'],
+                  raw: data,
+                );
+              }
+            }
+          }
         }
       } catch (_) {
         continue;
       }
     }
-    return null;
+
+    return fallback;
+  }
+
+  static String _normalizeSpecialty(String value) {
+    return value
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^ -áéíóúüñ]'), ' ')
+        .replaceAll(RegExp(r'[^a-z0-9áéíóúüñ]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   static String _normalizeAndCorrect(String input) {
@@ -610,6 +658,21 @@ class MentalHealthTriageService {
         .replaceAll(RegExp(r'[^\w\sáéíóúüñ]'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  static String _insertValue(String template, String value) {
+    if (template.isEmpty) return value;
+    if (template.contains('{value}')) {
+      return template.replaceFirst('{value}', value);
+    }
+    if (template.contains('()')) {
+      return template.replaceFirst('()', value);
+    }
+    final markerIndex = template.indexOf('.');
+    if (markerIndex >= 0) {
+      return template.replaceFirst('.', value);
+    }
+    return '$template $value'.trim();
   }
 
   static bool _isAskNameIntent(String normalizedInput) {
@@ -659,7 +722,7 @@ class MentalHealthTriageService {
     }
 
     final relevantInfo = memoryLines.take(3).join('. ');
-    return 'De lo que me has contado antes: . ¿Quieres que profundicemos en algo de esto?';
+    return 'De lo que me has contado antes: $relevantInfo. ¿Quieres que profundicemos en algo de esto?';
   }
 
   static String? _extractNameFromMessage(String message) {
@@ -821,15 +884,98 @@ class MentalHealthTriageService {
   }
 
   static String _mergeMemory(String existingMemory, String newMessage) {
-    final existing = existingMemory.trim();
-    if (existing.isEmpty) return 'Mensaje reciente: ';
-
-    final lines = existing
+    final existingLines = existingMemory
         .split('\n')
-        .where((line) => line.trim().isNotEmpty)
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
         .toList();
-    lines.add('Mensaje reciente: ');
 
-    return lines.take(10).join('\n'); // Mantener máximo 10 líneas
+    final facts = <String, String>{};
+    final order = <String>[];
+
+    void addFact(String key, String value) {
+      final normalizedKey = key.trim();
+      if (normalizedKey.isEmpty || value.trim().isEmpty) return;
+      if (!facts.containsKey(normalizedKey)) {
+        order.add(normalizedKey);
+      }
+      facts[normalizedKey] = value.trim();
+    }
+
+    for (final line in existingLines) {
+      final parts = line.split(':');
+      if (parts.length >= 2) {
+        final key = parts.first.trim();
+        final value = parts.sublist(1).join(':').trim();
+        addFact(key, value);
+      } else {
+        addFact('Nota', line);
+      }
+    }
+
+    for (final fact in _extractMemoryFacts(newMessage)) {
+      addFact(fact['key']!, fact['value']!);
+    }
+
+    if (_extractMemoryFacts(newMessage).isEmpty) {
+      addFact('Último tema', newMessage.trim());
+    }
+
+    final lines = order
+        .where((key) => facts[key]!.isNotEmpty)
+        .map((key) => '$key: ${facts[key]}')
+        .toList();
+
+    return lines.length <= 10
+        ? lines.join('\n')
+        : lines.sublist(0, 10).join('\n');
+  }
+
+  static List<Map<String, String>> _extractMemoryFacts(String message) {
+    final text = message.toLowerCase();
+    final facts = <Map<String, String>>[];
+
+    final nameMatch = RegExp(
+      r'me llamo\s+([a-záéíóúüñ\s]+)',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (nameMatch != null) {
+      facts.add({'key': 'Nombre', 'value': _capitalize(nameMatch[1]!.trim())});
+    }
+
+    final professionMatch = RegExp(
+      r'(soy|trabajo como|estoy estudiando|estudio)\s+([a-záéíóúüñ\s]+)',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (professionMatch != null) {
+      final profession = professionMatch[2]!.trim();
+      facts.add({'key': 'Profesión', 'value': _capitalize(profession)});
+    }
+
+    final hobbyMatch = RegExp(
+      r'me gusta[n]?\s+([a-záéíóúüñ\s]+)',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (hobbyMatch != null) {
+      facts.add({'key': 'Hobby', 'value': _capitalize(hobbyMatch[1]!.trim())});
+    }
+
+    final familyMatch = RegExp(
+      r'vivo con\s+([a-záéíóúüñ\s]+)|mi (mam[áa]|pap[áa]|hermano|hermana|pareja|familia)',
+      caseSensitive: false,
+    ).firstMatch(message);
+    if (familyMatch != null) {
+      facts.add({
+        'key': 'Situación familiar',
+        'value': _capitalize(familyMatch.group(0)!.trim()),
+      });
+    }
+
+    return facts;
+  }
+
+  static String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 }

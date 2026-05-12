@@ -3,7 +3,11 @@ class NotaClinicaModel {
   final String psicologoUid;
   final String pacienteUid;
   final String pacienteNombre;
-  final String contenido;
+  final String categoria; // Tema mental: Ansiedad, Depresión, etc.
+  final String diagnostico;
+  final String sintomas;
+  final String planTratamiento;
+  final String observaciones;
   final DateTime fecha;
   final String? citaId;
 
@@ -12,7 +16,11 @@ class NotaClinicaModel {
     required this.psicologoUid,
     required this.pacienteUid,
     required this.pacienteNombre,
-    required this.contenido,
+    required this.categoria,
+    required this.diagnostico,
+    required this.sintomas,
+    required this.planTratamiento,
+    required this.observaciones,
     required this.fecha,
     this.citaId,
   });
@@ -23,7 +31,11 @@ class NotaClinicaModel {
       psicologoUid: map['psicologoUid'] as String,
       pacienteUid: map['pacienteUid'] as String,
       pacienteNombre: map['pacienteNombre'] as String? ?? '',
-      contenido: map['contenido'] as String,
+      categoria: map['categoria'] as String? ?? '',
+      diagnostico: map['diagnostico'] as String? ?? '',
+      sintomas: map['sintomas'] as String? ?? '',
+      planTratamiento: map['planTratamiento'] as String? ?? '',
+      observaciones: map['observaciones'] as String? ?? '',
       fecha: DateTime.parse(map['fecha'] as String),
       citaId: map['citaId'] as String?,
     );
@@ -33,7 +45,11 @@ class NotaClinicaModel {
     'psicologoUid': psicologoUid,
     'pacienteUid': pacienteUid,
     'pacienteNombre': pacienteNombre,
-    'contenido': contenido,
+    'categoria': categoria,
+    'diagnostico': diagnostico,
+    'sintomas': sintomas,
+    'planTratamiento': planTratamiento,
+    'observaciones': observaciones,
     'fecha': fecha.toIso8601String(),
     if (citaId != null) 'citaId': citaId,
   };
