@@ -23,7 +23,9 @@ class ApiClient {
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
-    debugPrint('[TOKEN] Token obtenido: ${token != null ? token.substring(0, 20) + '...' : 'null'}');
+    debugPrint(
+      '[TOKEN] Token obtenido: ${token != null ? token.substring(0, 20) + '...' : 'null'}',
+    );
     return token;
   }
 
@@ -43,7 +45,9 @@ class ApiClient {
         debugPrint('[HEADERS] Auth header agregado');
       } else {
         debugPrint('[HEADERS] ⚠️ Auth solicitado pero no hay token');
-        throw Exception('No se encontró token de autenticación. Inicia sesión de nuevo.');
+        throw Exception(
+          'No se encontró token de autenticación. Inicia sesión de nuevo.',
+        );
       }
     }
     return headers;
@@ -110,21 +114,18 @@ class ApiClient {
     bool auth = false,
   }) async {
     final uri = Uri.parse('$kBaseUrl$path');
-    final url = Uri.parse('$kBaseUrl$path');
     final headers = await _headers(auth: auth);
     final jsonBody = json.encode(body ?? {});
     try {
-      debugPrint('[API][PUT] $url');
+      debugPrint('[API][PUT] $uri');
       debugPrint('[API][PUT] Headers: ' + headers.toString());
       debugPrint('[API][PUT] Body: ' + jsonBody);
-      final response = await http.put(url, headers: headers, body: jsonBody);
+      final response = await http
+          .put(uri, headers: headers, body: jsonBody)
+          .timeout(_requestTimeout);
       debugPrint('[API][PUT] Status: ${response.statusCode}');
       debugPrint('[API][PUT] Response: ${response.body}');
-      return response;
-    } catch (e, st) {
-      debugPrint('[API][PUT][ERROR] $e');
-      debugPrint(st.toString());
-      rethrow;
+      return _parse(response);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',

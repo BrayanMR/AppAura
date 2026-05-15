@@ -372,6 +372,7 @@ class _AutorizacionPadresScreenState extends State<AutorizacionPadresScreen> {
         fileName: archivo.name,
         fileFieldName: 'file',
         fields: {'destination': destination, 'mimeType': mimeType},
+        auth: true,
       );
 
       await FirestoreService.updateDocument('usuarios', uid, {

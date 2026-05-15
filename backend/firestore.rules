@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSameUser(userId) {
+      return request.auth.uid == userId;
+    }
+
+    match /usuarios/{userId} {
+      allow read: if isSignedIn() && isSameUser(userId);
+      allow create: if isSignedIn() && request.resource.data.uid == userId;
+      allow update: if isSignedIn() && isSameUser(userId);
+      allow delete: if isSignedIn() && isSameUser(userId);
+
+      allow write: if false; // control granular a través de create/update/delete
+    }
+
+    match /chatIa/{chatId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Agrega reglas específicas para colecciones públicas o confiables aquí.
+    match /{collection}/{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -292,7 +292,7 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
       'field': 'documento',
       'operator': '==',
       'value': documento,
-    });
+    }, auth: true);
 
     if (data is List && data.isNotEmpty) {
       final first = data.first;

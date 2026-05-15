@@ -1,3 +1,4 @@
+import 'package:aurapp/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,9 +8,8 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -183,25 +183,22 @@ class _RegisterScreenState extends State<RegisterScreen>
       final nombre = _nombreCtrl.text.trim();
       final apellido = _apellidoCtrl.text.trim();
 
-      // 🔥 REGISTRO
-      final registerRes = await AuthService.register(
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
-        displayName: '$nombre $apellido',
       );
 
-      final uid = registerRes['uid'] as String?;
-      if (uid == null || uid.isEmpty) {
-        throw Exception('No se pudo obtener el UID del usuario creado');
-      }
+      final user = cred.user;
+      if (user == null) throw Exception('No se pudo crear el usuario');
 
+      await user.updateDisplayName('$nombre $apellido');
+      final uid = user.uid;
       final requiereAutorizacion = edad < 18;
 
-      // 🔐 Obtener JWT del backend antes de escribir en Firestore vía API
+      // Guardar el token JWT del backend para que las siguientes llamadas auth funcione.
       await AuthService.login(email: email, password: password);
 
-      // ✅ GUARDAR EN FIRESTORE (requiere token JWT de backend)
-      await FirestoreService.setDocument('usuarios', uid, {
+      await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
         'uid': uid,
         'nombre': nombre,
         'apellido': apellido,
@@ -220,17 +217,11 @@ class _RegisterScreenState extends State<RegisterScreen>
               : 'no_requerida',
           'requiereAutorizacion': requiereAutorizacion,
         },
-        // Campos individuales fuera de la lista
-        'documentoUrl': _documentoUrlCtrl.text
-            .trim(), // URL del documento de autorización
-        'nombrePadre': _nombrePadreCtrl.text
-            .trim(), // Nombre del padre/madre/acudiente
-        'documentoPadre': _documentoPadreCtrl.text
-            .trim(), // Documento del padre/madre/acudiente
-        'parentescoPadre': _parentescoPadreCtrl.text
-            .trim(), // Parentesco (padre, madre, acudiente)
-        'observacionesPadres': _observacionesPadresCtrl.text
-            .trim(), // Observaciones
+        'documentoUrl': _documentoUrlCtrl.text.trim(),
+        'nombrePadre': _nombrePadreCtrl.text.trim(),
+        'documentoPadre': _documentoPadreCtrl.text.trim(),
+        'parentescoPadre': _parentescoPadreCtrl.text.trim(),
+        'observacionesPadres': _observacionesPadresCtrl.text.trim(),
         'createdAt': DateTime.now().toIso8601String(),
       });
 

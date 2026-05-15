@@ -8,33 +8,21 @@ router.use(authMiddleware);
 
 // ── Obtener chats de un usuario ────────────────────────────────────────────────
 // GET /api/chats?documento=12345
-// GET /api/chats?uid=abc123
 router.get('/', async (req, res) => {
   try {
-    const { documento, uid } = req.query;
-    if (!documento && !uid) {
-      return res.status(400).json({ error: 'Falta el parámetro ?documento= o ?uid=' });
-    }
+    const { documento } = req.query;
+    if (!documento) return res.status(400).json({ error: 'Falta el parámetro ?documento=' });
 
     const db = getFirestore();
-    const promises = [];
-
-    if (documento) {
-      promises.push(db.collection('Chats').where('Documento_usuario', '==', documento).get());
-      promises.push(db.collection('Chats').where('Documento_psicologo', '==', documento).get());
-    }
-
-    if (uid) {
-      promises.push(db.collection('Chats').where('Uid_usuario', '==', uid).get());
-      promises.push(db.collection('Chats').where('Uid_psicologo', '==', uid).get());
-    }
-
-    const results = await Promise.all(promises);
+    // Buscar chats donde el usuario es paciente o psicólogo
+    const [comoUsuario, comoPsicologo] = await Promise.all([
+      db.collection('Chats').where('Documento_usuario', '==', documento).get(),
+      db.collection('Chats').where('Documento_psicologo', '==', documento).get(),
+    ]);
 
     const chats = new Map();
-    for (const result of results) {
-      result.docs.forEach(doc => chats.set(doc.id, { id: doc.id, ...doc.data() }));
-    }
+    comoUsuario.docs.forEach(doc  => chats.set(doc.id, { id: doc.id, ...doc.data() }));
+    comoPsicologo.docs.forEach(doc => chats.set(doc.id, { id: doc.id, ...doc.data() }));
 
     res.json([...chats.values()]);
   } catch (error) {

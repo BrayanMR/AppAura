@@ -16,6 +16,9 @@ class AuthService {
       if (displayName != null && displayName.trim().isNotEmpty)
         'displayName': displayName.trim(),
     });
+    if (data is Map && data['token'] is String) {
+      await ApiClient.saveToken(data['token'] as String);
+    }
     return Map<String, dynamic>.from(data);
   }
 

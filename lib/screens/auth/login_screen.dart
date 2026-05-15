@@ -5,12 +5,10 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/validators.dart';
 import '../../config/firebase_initializer.dart';
 import '../../routes/app_routes.dart';
-import '../../services/firestore_service.dart';
 import '../../widgets/custom_button.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -81,21 +79,21 @@ class _LoginScreenState extends State<LoginScreen>
       final user = cred.user;
       if (user == null) throw Exception('no se pudo iniciar sesion');
 
-      // --- NUEVO: Login en tu backend y guardar el JWT ---
-      final backendLogin = await ApiClient.post('/api/auth/login', {
-        'email': email,
-        'password': password,
-      });
-      if (backendLogin['token'] == null) {
-        throw Exception('No se pudo obtener el token JWT del backend');
+      try {
+        await AuthService.login(email: email, password: password);
+      } catch (error) {
+        debugPrint('Backend login falló, continuando con FirebaseAuth: $error');
       }
-      await ApiClient.saveToken(backendLogin['token']);
-      // --- FIN NUEVO ---
 
-      // Ya no es necesario: await AuthService.verifyToken(idToken);
-      await AuthService.getUser(user.uid);
+      final profileDoc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(user.uid)
+          .get();
 
-      final profile = await FirestoreService.getDocument('usuarios', user.uid);
+      if (!profileDoc.exists) {
+        throw Exception('No se encontró el perfil en Firestore');
+      }
+      final profile = profileDoc.data()!;
       final activo = _isTruthy(profile['activo']);
       final roleValue = _normalizeRoleValue(profile['role'] ?? profile['rol']);
       final autorizacion = profile['autorizacionPadres'];
@@ -108,9 +106,6 @@ class _LoginScreenState extends State<LoginScreen>
           documentoUrl != null && documentoUrl.trim().isNotEmpty;
 
       if (!activo) {
-        await AuthService.signOut();
-        await FirebaseAuth.instance.signOut();
-
         if (requiereAutorizacion && !tieneDocumentoEnviado) {
           if (!mounted) return;
           Navigator.pushReplacementNamed(
@@ -124,6 +119,9 @@ class _LoginScreenState extends State<LoginScreen>
           );
           return;
         }
+
+        await AuthService.signOut();
+        await FirebaseAuth.instance.signOut();
 
         if (!mounted) return;
         await _showLoginAlert(
@@ -161,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen>
         },
       );
     } catch (e) {
+      await FirebaseAuth.instance.signOut();
       if (mounted) {
         await _showLoginAlert(
           title: 'No se pudo iniciar sesión',

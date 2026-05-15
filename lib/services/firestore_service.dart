@@ -6,7 +6,7 @@ class FirestoreService {
   static Future<List<Map<String, dynamic>>> getCollection(
     String collection,
   ) async {
-    final data = await ApiClient.get('/api/firestore/$collection');
+    final data = await ApiClient.get('/api/firestore/$collection', auth: true);
     return List<Map<String, dynamic>>.from(
       (data as List).map((e) => Map<String, dynamic>.from(e)),
     );
@@ -17,7 +17,10 @@ class FirestoreService {
     String collection,
     String docId,
   ) async {
-    final data = await ApiClient.get('/api/firestore/$collection/$docId');
+    final data = await ApiClient.get(
+      '/api/firestore/$collection/$docId',
+      auth: true,
+    );
     return Map<String, dynamic>.from(data);
   }
 
@@ -26,7 +29,11 @@ class FirestoreService {
     String collection,
     Map<String, dynamic> fields,
   ) async {
-    final data = await ApiClient.post('/api/firestore/$collection', fields);
+    final data = await ApiClient.post(
+      '/api/firestore/$collection',
+      fields,
+      auth: true,
+    );
     return data['id'] as String;
   }
 
@@ -36,7 +43,11 @@ class FirestoreService {
     String docId,
     Map<String, dynamic> fields,
   ) async {
-    await ApiClient.put('/api/firestore/$collection/$docId', fields);
+    await ApiClient.put(
+      '/api/firestore/$collection/$docId',
+      fields,
+      auth: true,
+    );
   }
 
   // ── Actualizar campos ────────────────────────────────────────────────────
@@ -45,12 +56,16 @@ class FirestoreService {
     String docId,
     Map<String, dynamic> fields,
   ) async {
-    await ApiClient.patch('/api/firestore/$collection/$docId', fields);
+    await ApiClient.patch(
+      '/api/firestore/$collection/$docId',
+      fields,
+      auth: true,
+    );
   }
 
   // ── Eliminar documento ───────────────────────────────────────────────────
   static Future<void> deleteDocument(String collection, String docId) async {
-    await ApiClient.delete('/api/firestore/$collection/$docId');
+    await ApiClient.delete('/api/firestore/$collection/$docId', auth: true);
   }
 
   // ── Consulta con filtro ───────────────────────────────────────────────────
@@ -65,7 +80,7 @@ class FirestoreService {
       'field': field,
       'operator': operator,
       'value': value,
-    });
+    }, auth: true);
     return List<Map<String, dynamic>>.from(
       (data as List).map((e) => Map<String, dynamic>.from(e)),
     );
