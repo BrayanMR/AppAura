@@ -38,7 +38,7 @@ class _NotasClinicasScreenState extends State<NotasClinicasScreen> {
 
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted || _loading) return;
       _loadNotas(showLoading: false);
     });
@@ -253,13 +253,6 @@ class _NotasClinicasScreenState extends State<NotasClinicasScreen> {
                                           color: AppColors.textHint,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        timeLabel,
-                                        style: AppTextStyles.bodySmall.copyWith(
-                                          color: AppColors.textHint,
-                                        ),
-                                      ),
                                     ],
                                   ),
                                 ],
@@ -293,17 +286,7 @@ class _NotasClinicasScreenState extends State<NotasClinicasScreen> {
                                 children: [
                                   _buildTag(nota.categoria),
                                   const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      nota.pacienteUid.isNotEmpty
-                                          ? 'UID: ${nota.pacienteUid}'
-                                          : 'UID no disponible',
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.textHint,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
+                                  Expanded(child: Text(" ")),
                                   IconButton(
                                     icon: const Icon(
                                       Icons.edit,
@@ -488,3 +471,4 @@ class _NotasClinicasScreenState extends State<NotasClinicasScreen> {
     }
   }
 }
+
