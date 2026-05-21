@@ -7,8 +7,10 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/cita_model.dart';
+import '../../services/chat_service.dart';
 import '../../services/cita_service.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/styled_alert.dart';
 
 class CitasPsicologoScreen extends StatefulWidget {
   final String? uid;
@@ -151,98 +153,112 @@ class _CitasPsicologoScreenState extends State<CitasPsicologoScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchPacientes() async {
-    final users = <Map<String, dynamic>>[];
-    final seen = <String>{};
+    final pacientesMap = <String, Map<String, dynamic>>{};
 
-    Future<void> addFromCollection(String collection) async {
-      final docs = await FirestoreService.getCollection(collection);
-      for (final raw in docs) {
-        final role = _readString(raw, const ['role', 'rol']).toLowerCase();
-        if (role != 'usuario') continue;
-
-        final documento = _readString(raw, const ['documento', 'Documento']);
-        final uid = _readString(raw, const ['uid']);
-        final nombre = _readString(raw, const ['nombre', 'displayName']);
-        final apellido = _readString(raw, const ['apellido']);
-        final nombreCompleto = [
-          nombre,
-          apellido,
-        ].where((part) => part.trim().isNotEmpty).join(' ').trim();
-
-        final key = documento.isNotEmpty
-            ? 'doc:$documento'
-            : uid.isNotEmpty
-            ? 'uid:$uid'
-            : 'id:${raw['id'] ?? ''}';
-        if (key.trim().isEmpty || seen.contains(key)) continue;
-
-        seen.add(key);
-        users.add(<String, dynamic>{
-          'uid': uid,
-          'documento': documento,
-          'nombre': nombreCompleto.isNotEmpty ? nombreCompleto : 'Usuario',
-          'correo': _readString(raw, const ['correo', 'email']),
-        });
-      }
+    final documentoPsicologo = _documento?.trim() ?? '';
+    final psicologoUid = _uid?.trim() ?? '';
+    if (documentoPsicologo.isEmpty && psicologoUid.isEmpty) {
+      return <Map<String, dynamic>>[];
     }
 
-    // Camino rápido: traer solo usuarios con role=usuario en colección principal.
     try {
-      final docs = await FirestoreService.query(
-        'usuarios',
-        field: 'role',
-        operator: '==',
-        value: 'usuario',
+      final chats = await ChatService.fetchChats(
+        documento: documentoPsicologo,
+        uid: psicologoUid,
       );
-      for (final raw in docs) {
-        final documento = _readString(raw, const ['documento', 'Documento']);
-        final uid = _readString(raw, const ['uid']);
-        final nombre = _readString(raw, const ['nombre', 'displayName']);
-        final apellido = _readString(raw, const ['apellido']);
-        final nombreCompleto = [
-          nombre,
-          apellido,
-        ].where((part) => part.trim().isNotEmpty).join(' ').trim();
 
-        final key = documento.isNotEmpty
-            ? 'doc:$documento'
-            : uid.isNotEmpty
-            ? 'uid:$uid'
-            : 'id:${raw['id'] ?? ''}';
-        if (key.trim().isEmpty || seen.contains(key)) continue;
+      for (final chat in chats) {
+        final patientDocument = _readString(chat, const [
+          'Documento_usuario',
+          'documento_usuario',
+          'documentoUsuario',
+        ]);
+        final patientUid = _readString(chat, const [
+          'Uid_usuario',
+          'uid_usuario',
+          'uidUsuario',
+        ]);
+        final key = patientDocument.isNotEmpty
+            ? 'doc:$patientDocument'
+            : patientUid.isNotEmpty
+            ? 'uid:$patientUid'
+            : (chat['id'] ?? '').toString();
+        if (key.trim().isEmpty) continue;
 
-        seen.add(key);
-        users.add(<String, dynamic>{
-          'uid': uid,
-          'documento': documento,
-          'nombre': nombreCompleto.isNotEmpty ? nombreCompleto : 'Usuario',
-          'correo': _readString(raw, const ['correo', 'email']),
-        });
+        final nombre = _readString(chat, const [
+          'nombre_usuario',
+          'nombreUsuario',
+          'Nombre_usuario',
+          'Paciente_nombre',
+          'pacienteNombre',
+        ]);
+        final documento = patientDocument;
+        final uid = patientUid;
+
+        final existing = pacientesMap[key];
+        if (existing == null) {
+          pacientesMap[key] = <String, dynamic>{
+            'uid': uid,
+            'documento': documento,
+            'nombre': nombre.isNotEmpty ? nombre : 'Paciente',
+            'motivo': _readString(chat, const ['Motivo', 'motivo', 'Tema']),
+            'categoria': _readString(chat, const [
+              'Categoria',
+              'categoria',
+              'tema',
+            ]),
+            'psicologo': _readString(chat, const [
+              'nombre_psicologo',
+              'nombrePsicologo',
+              'Nombre_psicologo',
+            ]),
+          };
+          continue;
+        }
+
+        if (existing['nombre'].toString().isEmpty && nombre.isNotEmpty) {
+          existing['nombre'] = nombre;
+        }
+        if (existing['documento'].toString().isEmpty && documento.isNotEmpty) {
+          existing['documento'] = documento;
+        }
+        if (existing['uid'].toString().isEmpty && uid.isNotEmpty) {
+          existing['uid'] = uid;
+        }
+        if (existing['motivo'].toString().isEmpty) {
+          existing['motivo'] = _readString(chat, const [
+            'Motivo',
+            'motivo',
+            'Tema',
+          ]);
+        }
+        if (existing['categoria'].toString().isEmpty) {
+          existing['categoria'] = _readString(chat, const [
+            'Categoria',
+            'categoria',
+            'tema',
+          ]);
+        }
+        if (existing['psicologo'].toString().isEmpty) {
+          existing['psicologo'] = _readString(chat, const [
+            'nombre_psicologo',
+            'nombrePsicologo',
+            'Nombre_psicologo',
+          ]);
+        }
       }
     } catch (_) {
-      // Fallback a colecciones variantes si la consulta filtrada no existe.
-      for (final collection in const [
-        'usuarios',
-        'Usuarios',
-        'users',
-        'Users',
-      ]) {
-        try {
-          final before = users.length;
-          await addFromCollection(collection);
-          if (users.length > before && collection.toLowerCase() == 'usuarios') {
-            break;
-          }
-        } catch (_) {}
-      }
+      return <Map<String, dynamic>>[];
     }
 
-    users.sort(
-      (a, b) => (a['nombre'] ?? '').toString().toLowerCase().compareTo(
-        (b['nombre'] ?? '').toString().toLowerCase(),
-      ),
-    );
-    return users;
+    final pacientes = pacientesMap.values.toList()
+      ..sort((a, b) {
+        final aName = a['nombre'].toString().toLowerCase();
+        final bName = b['nombre'].toString().toLowerCase();
+        return aName.compareTo(bName);
+      });
+
+    return pacientes;
   }
 
   Future<void> _primePacientesCache() async {
@@ -344,16 +360,20 @@ class _CitasPsicologoScreenState extends State<CitasPsicologoScreen> {
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cita creada correctamente.')),
+      showStyledSnackbar(
+        context,
+        'Cita creada correctamente.',
+        isSuccess: true,
       );
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _citas.removeWhere((cita) => cita.id == tempId);
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo crear la cita: $error')),
+      showStyledSnackbar(
+        context,
+        'No se pudo crear la cita: $error',
+        isError: true,
       );
     } finally {
       if (mounted) {
@@ -365,22 +385,12 @@ class _CitasPsicologoScreenState extends State<CitasPsicologoScreen> {
   }
 
   Future<void> _eliminarCita(CitaModel cita) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar cita'),
-        content: Text('¿Quieres eliminar la cita de ${cita.paciente}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+    final confirm = await showStyledConfirmationDialog(
+      context,
+      title: 'Eliminar cita',
+      message: '¿Quieres eliminar la cita de ${cita.paciente}?',
+      confirmLabel: 'Eliminar',
+      cancelLabel: 'Cancelar',
     );
 
     if (confirm != true) return;
@@ -393,8 +403,10 @@ class _CitasPsicologoScreenState extends State<CitasPsicologoScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo eliminar la cita: $error')),
+      showStyledSnackbar(
+        context,
+        'No se pudo eliminar la cita: $error',
+        isError: true,
       );
     }
   }
@@ -710,8 +722,10 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudieron cargar pacientes.')),
+      showStyledSnackbar(
+        context,
+        'No se pudieron cargar pacientes.',
+        isError: true,
       );
     } finally {
       if (mounted) {
@@ -723,10 +737,10 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
   Future<void> _guardar() async {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid || _pacienteSeleccionado == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona un paciente y completa el formulario.'),
-        ),
+      showStyledSnackbar(
+        context,
+        'Selecciona un paciente y completa el formulario.',
+        isError: true,
       );
       return;
     }
@@ -734,8 +748,10 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
     final parsedDate = _parseDate(_fechaCtrl.text.trim());
     final parsedTime = _parseTime(_horaCtrl.text.trim());
     if (parsedDate == null || parsedTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usa fecha dd/MM/yyyy y hora HH:mm.')),
+      showStyledSnackbar(
+        context,
+        'Usa fecha dd/MM/yyyy y hora HH:mm.',
+        isError: true,
       );
       return;
     }
@@ -860,7 +876,9 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
             hourMinuteTextColor: AppColors.textPrimary,
             dayPeriodColor: Colors.white,
             dayPeriodTextColor: AppColors.textPrimary,
-            dayPeriodBorderSide: BorderSide(color: AppColors.primary.withOpacity(0.24)),
+            dayPeriodBorderSide: BorderSide(
+              color: AppColors.primary.withOpacity(0.24),
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
@@ -1101,6 +1119,7 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
                         controller: _motivoCtrl,
                         minLines: 3,
                         maxLines: 5,
+                        maxLength: 500,
                         decoration: _fieldDecoration(
                           label: 'Motivo de la cita',
                           icon: Icons.edit_note_outlined,
@@ -1108,6 +1127,9 @@ class _CitaCreatePageState extends State<_CitaCreatePage> {
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Escribe el motivo';
+                          }
+                          if (value.trim().length > 500) {
+                            return 'El motivo no puede exceder 500 caracteres';
                           }
                           return null;
                         },

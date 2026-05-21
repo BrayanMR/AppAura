@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/styled_alert.dart';
 import '../../core/utils/validators.dart';
 
 class PerfilScreen extends StatefulWidget {
@@ -82,8 +83,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
       _roleLabel = role == 'psicologo' ? 'Psicólogo' : 'Usuario';
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cargar el perfil: $error')),
+      showStyledSnackbar(
+        context,
+        'No se pudo cargar el perfil: $error',
+        isError: true,
       );
     } finally {
       if (mounted) {
@@ -138,14 +141,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
+      showStyledSnackbar(context, 'Perfil actualizado', isSuccess: true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo guardar: $error')));
+      showStyledSnackbar(context, 'No se pudo guardar: $error', isError: true);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -167,8 +166,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cerrar sesión: $error')),
+      showStyledSnackbar(
+        context,
+        'No se pudo cerrar sesión: $error',
+        isError: true,
       );
     } finally {
       if (mounted) {

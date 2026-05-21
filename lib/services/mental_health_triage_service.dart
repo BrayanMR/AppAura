@@ -582,58 +582,100 @@ class MentalHealthTriageService {
     final normalizedSpecialty = _normalizeSpecialty(specialty);
     PsychologistMatch? fallback;
 
+    const psychologistRoles = <String>[
+      'psicologo',
+      'psicóloga',
+      'psicologa',
+      'psicólogo',
+      'psicólogas',
+      'psicologas',
+      'psicólogos',
+      'psicologos',
+    ];
+
     for (final collection in _collections) {
-      try {
-        final docs = await FirestoreService.query(
-          collection,
-          field: 'role',
-          operator: '==',
-          value: 'psicologo',
-        );
+      for (final roleValue in psychologistRoles) {
+        try {
+          final docs = await FirestoreService.query(
+            collection,
+            field: 'role',
+            operator: '==',
+            value: roleValue,
+          );
 
-        for (final doc in docs) {
-          final data = doc as Map<String, dynamic>;
-          final specialties =
-              data['especialidades'] ?? data['specialties'] ?? [];
+          for (final doc in docs) {
+            final data = doc as Map<String, dynamic>;
+            final specialties =
+                data['especialidades'] ?? data['specialties'] ?? [];
 
-          if (fallback == null) {
-            fallback = PsychologistMatch(
-              collection: collection,
-              id: doc['id'] ?? '',
-              uid: data['uid'] ?? '',
-              documento: data['documento'] ?? '',
-              name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
-              specialty: specialty,
-              phone: data['telefono'] ?? data['phone'],
-              raw: data,
-            );
-          }
+            if (fallback == null) {
+              fallback = PsychologistMatch(
+                collection: collection,
+                id: doc['id'] ?? '',
+                uid: data['uid'] ?? '',
+                documento: data['documento'] ?? '',
+                name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
+                specialty: specialty,
+                phone: data['telefono'] ?? data['phone'],
+                raw: data,
+              );
+            }
 
-          if (specialties is List) {
-            for (final item in specialties) {
-              final specialtyValue = item?.toString() ?? '';
-              if (specialtyValue.trim().isEmpty) continue;
+            if (specialties is List) {
+              for (final item in specialties) {
+                final specialtyValue = item?.toString() ?? '';
+                if (specialtyValue.trim().isEmpty) continue;
 
-              final normalizedItem = _normalizeSpecialty(specialtyValue);
-              if (normalizedItem == normalizedSpecialty ||
-                  normalizedItem.contains(normalizedSpecialty) ||
-                  normalizedSpecialty.contains(normalizedItem)) {
-                return PsychologistMatch(
-                  collection: collection,
-                  id: doc['id'] ?? '',
-                  uid: data['uid'] ?? '',
-                  documento: data['documento'] ?? '',
-                  name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
-                  specialty: specialty,
-                  phone: data['telefono'] ?? data['phone'],
-                  raw: data,
-                );
+                final normalizedItem = _normalizeSpecialty(specialtyValue);
+                if (normalizedItem == normalizedSpecialty ||
+                    normalizedItem.contains(normalizedSpecialty) ||
+                    normalizedSpecialty.contains(normalizedItem)) {
+                  return PsychologistMatch(
+                    collection: collection,
+                    id: doc['id'] ?? '',
+                    uid: data['uid'] ?? '',
+                    documento: data['documento'] ?? '',
+                    name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
+                    specialty: specialty,
+                    phone: data['telefono'] ?? data['phone'],
+                    raw: data,
+                  );
+                }
               }
             }
           }
+        } catch (_) {
+          continue;
         }
-      } catch (_) {
-        continue;
+      }
+    }
+
+    if (fallback == null) {
+      for (final collection in _collections) {
+        try {
+          final docs = await FirestoreService.getCollection(collection);
+          for (final doc in docs) {
+            final data = doc as Map<String, dynamic>;
+            final role = (data['role'] ?? data['rol'] ?? data['tipo'] ?? '')
+                .toString()
+                .toLowerCase()
+                .trim();
+            if (role.contains('psicolog')) {
+              return PsychologistMatch(
+                collection: collection,
+                id: doc['id'] ?? '',
+                uid: data['uid'] ?? '',
+                documento: data['documento'] ?? '',
+                name: data['nombre'] ?? data['name'] ?? 'Psicólogo',
+                specialty: specialty,
+                phone: data['telefono'] ?? data['phone'],
+                raw: data,
+              );
+            }
+          }
+        } catch (_) {
+          continue;
+        }
       }
     }
 

@@ -798,6 +798,146 @@ class _DashboardUsuarioState extends State<_DashboardUsuario> {
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF8365F1),
+                          Color(0xFFBA6CF0),
+                          Color(0xFFED8CFB),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x330F0B4A),
+                          blurRadius: 32,
+                          offset: Offset(0, 16),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.self_improvement,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$greeting, $displayName 🌙',
+                                    style: AppTextStyles.titleLarge.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Tu mente merece descansar también.',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.solicitarCita,
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(
+                                  Icons.calendar_today_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Respira profundo, todo estará bien. ♡',
+                          style: AppTextStyles.displayMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Crea un espacio de calma hoy con ejercicios suaves y apoyo cuando lo necesites.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: const Color(0xFF7F56D9),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                ),
+                                onPressed: widget.onGoChat,
+                                icon: const Icon(Icons.chat_bubble_outline),
+                                label: const Text('chats'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(
+                                Icons.favorite_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(

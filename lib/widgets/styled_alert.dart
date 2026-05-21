@@ -160,6 +160,8 @@ void showStyledSnackbar(
 
   final snackBar = SnackBar(
     behavior: SnackBarBehavior.floating,
+    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    elevation: 4,
     backgroundColor: backgroundColor,
     duration: duration,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

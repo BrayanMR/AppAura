@@ -10,6 +10,7 @@ import 'screens/auth/autorizacion_padres_screen.dart';
 import 'screens/psicologo/home_psicologo_screen.dart';
 import 'screens/psicologo/crear_nota_clinica_screen.dart';
 import 'screens/usuario/home_usuario_screen.dart';
+import 'screens/usuario/chat_screen.dart';
 import 'screens/usuario/solicitar_cita_screen.dart';
 import 'screens/shared/perfil_screen.dart';
 
@@ -39,6 +40,7 @@ class AurApp extends StatelessWidget {
         AppRoutes.homePsicologo: (_) => const HomePsicologoScreen(),
         AppRoutes.crearNotaClinica: (_) => const CrearNotaClinicaScreen(),
         AppRoutes.homeUsuario: (_) => const HomeUsuarioScreen(),
+        AppRoutes.chat: (_) => const ChatScreen(),
         AppRoutes.solicitarCita: (_) => const SolicitarCitaScreen(),
         AppRoutes.perfil: (_) => const PerfilScreen(),
       },

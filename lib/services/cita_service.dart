@@ -8,27 +8,30 @@ class CitaService {
     String? pacienteUid,
     String? pacienteDocumento,
   }) async {
-    final docs = await FirestoreService.getCollection(_collection);
     final normalizedUid = pacienteUid?.trim() ?? '';
     final normalizedDocumento = pacienteDocumento?.trim() ?? '';
-    final hasFilter =
-        normalizedUid.isNotEmpty || normalizedDocumento.isNotEmpty;
+    List<Map<String, dynamic>> docs;
+
+    if (normalizedUid.isNotEmpty) {
+      docs = await FirestoreService.query(
+        _collection,
+        field: 'pacienteUid',
+        operator: '==',
+        value: normalizedUid,
+      );
+    } else if (normalizedDocumento.isNotEmpty) {
+      docs = await FirestoreService.query(
+        _collection,
+        field: 'pacienteDocumento',
+        operator: '==',
+        value: normalizedDocumento,
+      );
+    } else {
+      docs = await FirestoreService.getCollection(_collection);
+    }
 
     final citas = docs
         .map((doc) => CitaModel.fromMap(doc['id'].toString(), doc))
-        .where((cita) {
-          if (!hasFilter) {
-            return true;
-          }
-
-          final matchesUid =
-              normalizedUid.isNotEmpty && cita.pacienteUid == normalizedUid;
-          final matchesDocumento =
-              normalizedDocumento.isNotEmpty &&
-              cita.pacienteDocumento == normalizedDocumento;
-
-          return matchesUid || matchesDocumento;
-        })
         .toList();
 
     citas.sort((a, b) => b.fecha.compareTo(a.fecha));
@@ -40,36 +43,40 @@ class CitaService {
     String? psicologoNombre,
     String? psicologoDocumento,
   }) async {
-    final docs = await FirestoreService.getCollection(_collection);
     final normalizedUid = psicologoUid?.trim() ?? '';
     final normalizedNombre = psicologoNombre?.trim().toLowerCase() ?? '';
     final normalizedDocumento = psicologoDocumento?.trim() ?? '';
-    final hasFilter =
-        normalizedUid.isNotEmpty ||
-        normalizedNombre.isNotEmpty ||
-        normalizedDocumento.isNotEmpty;
+    List<Map<String, dynamic>> docs;
+
+    if (normalizedUid.isNotEmpty) {
+      docs = await FirestoreService.query(
+        _collection,
+        field: 'psicologoUid',
+        operator: '==',
+        value: normalizedUid,
+      );
+    } else if (normalizedDocumento.isNotEmpty) {
+      docs = await FirestoreService.query(
+        _collection,
+        field: 'psicologoDocumento',
+        operator: '==',
+        value: normalizedDocumento,
+      );
+    } else {
+      docs = await FirestoreService.getCollection(_collection);
+    }
 
     final citas = docs
         .map((doc) => CitaModel.fromMap(doc['id'].toString(), doc))
         .where((cita) {
-          if (!hasFilter) {
+          if (normalizedNombre.isEmpty) {
             return true;
           }
 
-          final matchesUid =
-              normalizedUid.isNotEmpty &&
-              (cita.psicologoUid == normalizedUid ||
-                  cita.pacienteUid == normalizedUid);
-          final matchesNombre =
-              normalizedNombre.isNotEmpty &&
-              (cita.psicologo.toLowerCase().contains(normalizedNombre) ||
-                  normalizedNombre.contains(cita.psicologo.toLowerCase()));
-          final matchesDocumento =
-              normalizedDocumento.isNotEmpty &&
-              (cita.psicologoDocumento == normalizedDocumento ||
-                  cita.pacienteDocumento == normalizedDocumento);
-
-          return matchesUid || matchesNombre || matchesDocumento;
+          final matchesNombre = cita.psicologo.toLowerCase().contains(
+            normalizedNombre,
+          );
+          return matchesNombre;
         })
         .toList();
 

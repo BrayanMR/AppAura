@@ -70,7 +70,13 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
       final nota = widget.nota!;
       _pacienteUidController.text = nota.pacienteUid;
       _pacienteNombreController.text = nota.pacienteNombre;
-      _categoriaSeleccionada = nota.categoria;
+      _categoriaSeleccionada = nota.categoria.isNotEmpty
+          ? nota.categoria
+          : null;
+      if (_categoriaSeleccionada != null &&
+          !_categorias.contains(_categoriaSeleccionada)) {
+        _categorias.insert(0, _categoriaSeleccionada!);
+      }
       _diagnosticoController.text = nota.diagnostico;
       _sintomasController.text = nota.sintomas;
       _planTratamientoController.text = nota.planTratamiento;
@@ -82,8 +88,11 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
       _pacienteSeleccionadoKey = nota.pacienteUid.isNotEmpty
           ? nota.pacienteUid
           : nota.pacienteNombre;
+      _pacientes = [_pacienteSeleccionado!];
+      _cargarPacientesPorChat();
+    } else {
+      _cargarPacientesPorChat();
     }
-    _cargarPacientesPorChat();
   }
 
   Future<void> _cargarPacientesPorChat() async {
@@ -199,10 +208,25 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
           return aName.compareTo(bName);
         });
 
-      setState(() {
+      if (_isEditing && _pacienteSeleccionadoKey != null) {
+        final matched = pacientes.where((paciente) {
+          final key = _getPacienteKey(paciente);
+          return key != null && key == _pacienteSeleccionadoKey;
+        }).toList();
+        if (matched.isNotEmpty) {
+          _pacientes = [matched.first];
+          _pacienteSeleccionado = {
+            ...matched.first,
+            'nombre':
+                matched.first['nombre'] ?? _pacienteSeleccionado!['nombre'],
+          };
+        } else {
+          _pacientes = [_pacienteSeleccionado!];
+        }
+      } else {
         _pacientes = pacientes;
-        _mostrarTodos = false;
-      });
+      }
+      _mostrarTodos = false;
     } catch (error) {
       if (mounted) {
         showStyledSnackbar(
@@ -466,6 +490,12 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
                           ),
                         ],
                       )
+                    else if (_isEditing && _pacienteSeleccionado != null)
+                      _PacienteCard(
+                        paciente: _pacientes.first,
+                        selected: true,
+                        onTap: () {},
+                      )
                     else
                       Container(
                         decoration: BoxDecoration(
@@ -492,7 +522,7 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
                           },
                         ),
                       ),
-                    if (_pacienteSeleccionado != null) ...[
+                    if (!_isEditing && _pacienteSeleccionado != null) ...[
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(12),

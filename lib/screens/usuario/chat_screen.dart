@@ -1701,6 +1701,24 @@ class _ConversationPageState extends State<_ConversationPage> {
           return;
         }
       }
+
+      if (directHumanSupportRequest) {
+        if (mounted) {
+          setState(() {
+            _addAssistantMessage(
+              'Lo siento, ahora mismo no encontré un psicólogo disponible para conectarte. Si quieres, seguimos por aquí y te acompaño en lo que estás viviendo.',
+            );
+          });
+        }
+        await _saveIaChatHistory();
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+        }
+        _scrollToBottom();
+        return;
+      }
     }
 
     if (_isNegativePsychologistRequest(text)) {
