@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/theme/app_colors.dart';
@@ -434,7 +435,7 @@ class _CrearNotaClinicaScreenState extends State<CrearNotaClinicaScreen> {
               child: Text(
                 _isEditing ? 'Guardar cambios' : 'Guardar',
                 style: const TextStyle(
-                  color: Color.fromARGB(255, 118, 90, 115),
+                  color: Color.fromARGB(255, 127, 32, 117),
                 ),
               ),
             ),
@@ -993,3 +994,4 @@ class _PacienteCard extends StatelessWidget {
     );
   }
 }
+
