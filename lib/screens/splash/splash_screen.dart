@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../routes/app_routes.dart';
+import '../../services/firestore_service.dart';
+import '../../services/session_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -35,7 +39,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.login);
+        _resolveSession();
       }
     });
   }
@@ -44,6 +48,102 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _resolveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(SessionService.tokenKey);
+    final currentUser = await _waitForRestoredUser();
+
+    if (currentUser == null || token == null || token.trim().isEmpty) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      return;
+    }
+
+    await SessionService.scheduleTokenExpiryLogout(token);
+
+    try {
+      final profile = await FirestoreService.getDocument(
+        'usuarios',
+        currentUser.uid,
+      );
+      final activo =
+          profile['activo'] == true ||
+          profile['activo'] == 'true' ||
+          profile['activo'] == 1;
+
+      if (!activo) {
+        await SessionService.forceLogout(redirect: false);
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
+        return;
+      }
+
+      final role = _normalizeRole(profile['role'] ?? profile['rol']);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        role == 'psicologo' ? AppRoutes.homePsicologo : AppRoutes.homeUsuario,
+        arguments: <String, dynamic>{
+          'uid': currentUser.uid,
+          'nombreUsuario':
+              profile['nombre'] as String? ??
+              currentUser.displayName ??
+              currentUser.email ??
+              '',
+          'documentoUsuario': profile['documento'] as String?,
+          'role': role,
+        },
+      );
+    } on Exception catch (error) {
+      final message = error.toString().toLowerCase();
+      if (message.contains('token inválido') ||
+          message.contains('token no proporcionado') ||
+          message.contains('token expirado') ||
+          message.contains('no autenticado') ||
+          message.contains('401') ||
+          message.contains('403')) {
+        await SessionService.forceLogout(redirect: false);
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.homeUsuario,
+        arguments: <String, dynamic>{
+          'uid': currentUser.uid,
+          'nombreUsuario': currentUser.displayName ?? currentUser.email ?? '',
+          'documentoUsuario': null,
+          'role': 'usuario',
+        },
+      );
+    }
+  }
+
+  Future<User?> _waitForRestoredUser() async {
+    final immediateUser = FirebaseAuth.instance.currentUser;
+    if (immediateUser != null) return immediateUser;
+
+    try {
+      return await FirebaseAuth.instance
+          .authStateChanges()
+          .firstWhere((user) => user != null)
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return FirebaseAuth.instance.currentUser;
+    }
+  }
+
+  String _normalizeRole(dynamic value) {
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    if (text == 'psicologo' || text == 'psicóloga' || text == 'psicologa') {
+      return 'psicologo';
+    }
+    return 'usuario';
   }
 
   @override

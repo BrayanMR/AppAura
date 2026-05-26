@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firestore_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../routes/app_routes.dart';
@@ -55,13 +56,7 @@ class _HomeUsuarioScreenState extends State<HomeUsuarioScreen> {
           profile['activo'] == 'true' ||
           profile['activo'] == 1;
       if (!activo && mounted) {
-        await AuthService.signOut();
-        await FirebaseAuth.instance.signOut();
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          AppRoutes.login,
-          (route) => false,
-        );
+        await SessionService.forceLogout(redirect: true);
       }
     } catch (_) {}
   }
@@ -86,37 +81,44 @@ class _HomeUsuarioScreenState extends State<HomeUsuarioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: Stack(
-        children: [
-          Positioned.fill(child: _buildCurrentTab()),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: LiquidBottomNav(
-              currentIndex: _currentIndex,
-              onTap: (i) => setState(() => _currentIndex = i),
-              items: const [
-                LiquidNavItem(
-                  icon: Icons.home_outlined,
-                  semanticLabel: 'Inicio',
-                ),
-                LiquidNavItem(
-                  icon: Icons.forum_outlined,
-                  semanticLabel: 'Foro',
-                ),
-                LiquidNavItem(
-                  icon: Icons.chat_bubble_outline,
-                  semanticLabel: 'Chats',
-                ),
-                LiquidNavItem(
-                  icon: Icons.person_outline,
-                  semanticLabel: 'Perfil',
-                ),
-              ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await SessionService.handleBackPressToExit();
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          children: [
+            Positioned.fill(child: _buildCurrentTab()),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: LiquidBottomNav(
+                currentIndex: _currentIndex,
+                onTap: (i) => setState(() => _currentIndex = i),
+                items: const [
+                  LiquidNavItem(
+                    icon: Icons.home_outlined,
+                    semanticLabel: 'Inicio',
+                  ),
+                  LiquidNavItem(
+                    icon: Icons.forum_outlined,
+                    semanticLabel: 'Foro',
+                  ),
+                  LiquidNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    semanticLabel: 'Chats',
+                  ),
+                  LiquidNavItem(
+                    icon: Icons.person_outline,
+                    semanticLabel: 'Perfil',
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

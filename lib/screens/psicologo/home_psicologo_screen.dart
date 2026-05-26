@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
 import '../../services/cita_service.dart';
 import '../../services/foro_service.dart';
+import '../../services/session_service.dart';
 import '../../widgets/nav_usuario.dart';
 import 'chats_psicologo_screen.dart';
 import 'pacientes_screen.dart';
@@ -38,6 +39,11 @@ class _HomePsicologoScreenState extends State<HomePsicologoScreen> {
   late List<Widget> _tabs;
   bool _tabsInitialized = false;
 
+  void _selectTab(int index) {
+    if (!mounted) return;
+    setState(() => _currentIndex = index);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -58,6 +64,7 @@ class _HomePsicologoScreenState extends State<HomePsicologoScreen> {
         uid: _uid,
         nombreUsuario: _nombreUsuario,
         documentoUsuario: _documentoUsuario,
+        onOpenTab: _selectTab,
       ),
       PacientesScreen(
         uid: _uid,
@@ -78,28 +85,41 @@ class _HomePsicologoScreenState extends State<HomePsicologoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _tabs[_currentIndex],
-      bottomNavigationBar: LiquidBottomNav(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
-        items: const [
-          LiquidNavItem(
-            icon: Icons.dashboard_outlined,
-            semanticLabel: 'Inicio',
-          ),
-          LiquidNavItem(icon: Icons.people_outline, semanticLabel: 'Pacientes'),
-          LiquidNavItem(
-            icon: Icons.chat_bubble_outline,
-            semanticLabel: 'Chats',
-          ),
-          LiquidNavItem(
-            icon: Icons.calendar_today_outlined,
-            semanticLabel: 'Citas',
-          ),
-          LiquidNavItem(icon: Icons.note_alt_outlined, semanticLabel: 'Notas'),
-          LiquidNavItem(icon: Icons.forum_outlined, semanticLabel: 'Foro'),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await SessionService.handleBackPressToExit();
+      },
+      child: Scaffold(
+        body: _tabs[_currentIndex],
+        bottomNavigationBar: LiquidBottomNav(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
+          items: const [
+            LiquidNavItem(
+              icon: Icons.dashboard_outlined,
+              semanticLabel: 'Inicio',
+            ),
+            LiquidNavItem(
+              icon: Icons.people_outline,
+              semanticLabel: 'Pacientes',
+            ),
+            LiquidNavItem(
+              icon: Icons.chat_bubble_outline,
+              semanticLabel: 'Chats',
+            ),
+            LiquidNavItem(
+              icon: Icons.calendar_today_outlined,
+              semanticLabel: 'Citas',
+            ),
+            LiquidNavItem(
+              icon: Icons.note_alt_outlined,
+              semanticLabel: 'Notas',
+            ),
+            LiquidNavItem(icon: Icons.forum_outlined, semanticLabel: 'Foro'),
+          ],
+        ),
       ),
     );
   }
@@ -121,11 +141,13 @@ class _DashboardPsicologo extends StatefulWidget {
   final String? uid;
   final String? nombreUsuario;
   final String? documentoUsuario;
+  final ValueChanged<int>? onOpenTab;
 
   const _DashboardPsicologo({
     this.uid,
     this.nombreUsuario,
     this.documentoUsuario,
+    this.onOpenTab,
   });
 
   @override
@@ -134,6 +156,13 @@ class _DashboardPsicologo extends StatefulWidget {
 
 class _DashboardPsicologoState extends State<_DashboardPsicologo> {
   late Future<_DashboardStats> _futureStats;
+
+  void _openTab(int index) {
+    widget.onOpenTab?.call(index);
+    final homeState = context
+        .findAncestorStateOfType<_HomePsicologoScreenState>();
+    homeState?._selectTab(index);
+  }
 
   @override
   void initState() {
@@ -295,11 +324,13 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                             icon: Icons.schedule_outlined,
                             text:
                                 'Hoy: ${snapshot.connectionState == ConnectionState.waiting ? '...' : (stats?.citasHoy ?? 0)}',
+                            onTap: () => _openTab(3),
                           ),
                           _MiniPill(
                             icon: Icons.pending_actions_outlined,
                             text:
                                 'Pendientes: ${snapshot.connectionState == ConnectionState.waiting ? '...' : (stats?.citasPendientes ?? 0)}',
+                            onTap: () => _openTab(3),
                           ),
                         ],
                       ),
@@ -334,6 +365,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.citasTotales ?? 0).toString(),
                       color: AppColors.primary,
+                      onTap: () => _openTab(3),
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
@@ -343,6 +375,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.citasPendientes ?? 0).toString(),
                       color: AppColors.warning,
+                      onTap: () => _openTab(3),
                     ),
                   ],
                 ),
@@ -356,6 +389,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.citasConfirmadas ?? 0).toString(),
                       color: AppColors.success,
+                      onTap: () => _openTab(3),
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
@@ -365,6 +399,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.citasHoy ?? 0).toString(),
                       color: AppColors.info,
+                      onTap: () => _openTab(3),
                     ),
                   ],
                 ),
@@ -380,6 +415,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.pacientes ?? 0).toString(),
                       color: AppColors.secondary,
+                      onTap: () => _openTab(1),
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
@@ -389,6 +425,7 @@ class _DashboardPsicologoState extends State<_DashboardPsicologo> {
                           ? '...'
                           : (stats?.postsForo ?? 0).toString(),
                       color: AppColors.rolePsicologo,
+                      onTap: () => _openTab(5),
                     ),
                   ],
                 ),
@@ -441,31 +478,39 @@ class _DashboardStats {
 class _MiniPill extends StatelessWidget {
   final IconData icon;
   final String text;
+  final VoidCallback? onTap;
 
-  const _MiniPill({required this.icon, required this.text});
+  const _MiniPill({required this.icon, required this.text, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withOpacity(0.25)),
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -476,74 +521,85 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2D9F5), width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x16000000),
-              blurRadius: 14,
-              offset: Offset(0, 4),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2D9F5), width: 1),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x16000000),
+                  blurRadius: 14,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: color, size: 28),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: value.trim() == '—'
-                        ? const Color(0xFFF0ECF8)
-                        : color.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: value.trim() == '—'
-                          ? const Color(0xFFD5CCE5)
-                          : color.withOpacity(0.28),
+                Row(
+                  children: [
+                    Icon(icon, color: color, size: 28),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: value.trim() == '—'
+                            ? const Color(0xFFF0ECF8)
+                            : color.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: value.trim() == '—'
+                              ? const Color(0xFFD5CCE5)
+                              : color.withOpacity(0.28),
+                        ),
+                      ),
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: value.trim() == '—'
+                              ? AppColors.textHint
+                              : color,
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: value.trim() == '—' ? AppColors.textHint : color,
-                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

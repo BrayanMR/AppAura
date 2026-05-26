@@ -244,6 +244,8 @@ class _RegisterScreenState extends State<RegisterScreen>
         );
       }
     } catch (e) {
+      await AuthService.signOut();
+      await FirebaseAuth.instance.signOut();
       if (mounted) {
         await _showMessageDialog(
           title: 'Error',

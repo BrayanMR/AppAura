@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'session_service.dart';
 
 /// Servicio de autenticación — comunica con /api/auth del backend Node.js
 class AuthService {
@@ -90,6 +91,6 @@ class AuthService {
 
   // ── Cerrar sesión (local) ────────────────────────────────────────────────
   static Future<void> signOut() async {
-    await ApiClient.clearToken();
+    await SessionService.clearStoredSession();
   }
 }

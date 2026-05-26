@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import 'session_service.dart';
 
 /// Cliente HTTP base que agrega el token de autenticación automáticamente
 /// y maneja respuestas/errores de manera uniforme.
@@ -17,6 +18,7 @@ class ApiClient {
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
+    await SessionService.scheduleTokenExpiryLogout(token);
     debugPrint('[TOKEN] Token guardado: ${token.substring(0, 20)}...');
   }
 
@@ -32,6 +34,7 @@ class ApiClient {
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    await SessionService.clearStoredSession();
     debugPrint('[TOKEN] Token eliminado');
   }
 
@@ -60,7 +63,7 @@ class ApiClient {
       final res = await http
           .get(uri, headers: await _headers(auth: auth))
           .timeout(_requestTimeout);
-      return _parse(res);
+      return _parse(res, auth: auth);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',
@@ -91,7 +94,7 @@ class ApiClient {
             body: jsonEncode(body),
           )
           .timeout(_requestTimeout);
-      return _parse(res);
+      return _parse(res, auth: auth);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',
@@ -125,7 +128,7 @@ class ApiClient {
           .timeout(_requestTimeout);
       debugPrint('[API][PUT] Status: ${response.statusCode}');
       debugPrint('[API][PUT] Response: ${response.body}');
-      return _parse(response);
+      return _parse(response, auth: auth);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',
@@ -156,7 +159,7 @@ class ApiClient {
             body: jsonEncode(body),
           )
           .timeout(_requestTimeout);
-      return _parse(res);
+      return _parse(res, auth: auth);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',
@@ -179,7 +182,7 @@ class ApiClient {
       final res = await http
           .delete(uri, headers: await _headers(auth: auth))
           .timeout(_requestTimeout);
-      return _parse(res);
+      return _parse(res, auth: auth);
     } on SocketException {
       throw Exception(
         'Sin conexión con el backend. Verifica internet y API_BASE_URL.',
@@ -219,11 +222,11 @@ class ApiClient {
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
-    return _parse(response);
+    return _parse(response, auth: auth);
   }
 
   // ── Parser de respuesta ───────────────────────────────────────────────────
-  static dynamic _parse(http.Response res) {
+  static dynamic _parse(http.Response res, {required bool auth}) {
     dynamic body;
     try {
       body = jsonDecode(res.body);
@@ -237,6 +240,11 @@ class ApiClient {
         : (body is Map && body['message'] != null)
         ? body['message']
         : 'Error ${res.statusCode}: ${res.reasonPhrase ?? 'respuesta inválida'}';
+
+    if (auth && (res.statusCode == 401 || res.statusCode == 403)) {
+      unawaited(SessionService.forceLogout(redirect: true));
+    }
+
     throw Exception(msg);
   }
 }

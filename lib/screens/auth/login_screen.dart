@@ -79,11 +79,7 @@ class _LoginScreenState extends State<LoginScreen>
       final user = cred.user;
       if (user == null) throw Exception('no se pudo iniciar sesion');
 
-      try {
-        await AuthService.login(email: email, password: password);
-      } catch (error) {
-        debugPrint('Backend login falló, continuando con FirebaseAuth: $error');
-      }
+      await AuthService.login(email: email, password: password);
 
       final profileDoc = await FirebaseFirestore.instance
           .collection('usuarios')
@@ -159,6 +155,7 @@ class _LoginScreenState extends State<LoginScreen>
         },
       );
     } catch (e) {
+      await AuthService.signOut();
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         await _showLoginAlert(

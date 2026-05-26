@@ -13,6 +13,7 @@ import 'screens/usuario/home_usuario_screen.dart';
 import 'screens/usuario/chat_screen.dart';
 import 'screens/usuario/solicitar_cita_screen.dart';
 import 'screens/shared/perfil_screen.dart';
+import 'services/session_service.dart';
 
 class AurApp extends StatelessWidget {
   const AurApp({super.key});
@@ -20,6 +21,7 @@ class AurApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: SessionService.navigatorKey,
       title: 'AurApp',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
