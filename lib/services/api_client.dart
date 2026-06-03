@@ -15,20 +15,37 @@ class ApiClient {
   static const Duration _requestTimeout = Duration(seconds: 20);
 
   // ── Token ─────────────────────────────────────────────────────────────────
+  static String _normalizeToken(String token) {
+    var cleaned = token.trim();
+    if (cleaned.toLowerCase().startsWith('bearer ')) {
+      cleaned = cleaned.substring(7).trim();
+    }
+    if (cleaned.startsWith('"') &&
+        cleaned.endsWith('"') &&
+        cleaned.length > 1) {
+      cleaned = cleaned.substring(1, cleaned.length - 1).trim();
+    }
+    return cleaned;
+  }
+
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    await SessionService.scheduleTokenExpiryLogout(token);
-    debugPrint('[TOKEN] Token guardado: ${token.substring(0, 20)}...');
+    final normalizedToken = _normalizeToken(token);
+    await prefs.setString(_tokenKey, normalizedToken);
+    await SessionService.scheduleTokenExpiryLogout(normalizedToken);
+    debugPrint(
+      '[TOKEN] Token guardado: ${normalizedToken.substring(0, 20)}...',
+    );
   }
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
+    final normalizedToken = token == null ? null : _normalizeToken(token);
     debugPrint(
-      '[TOKEN] Token obtenido: ${token != null ? token.substring(0, 20) + '...' : 'null'}',
+      '[TOKEN] Token obtenido: ${normalizedToken != null ? normalizedToken.substring(0, 20) + '...' : 'null'}',
     );
-    return token;
+    return normalizedToken;
   }
 
   static Future<void> clearToken() async {

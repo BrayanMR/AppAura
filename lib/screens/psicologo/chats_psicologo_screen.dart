@@ -449,7 +449,7 @@ class _ChatsPsicologoScreenState extends State<ChatsPsicologoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF9F7FC),
       appBar: AppBar(
         title: const Text('Chats de pacientes'),
         backgroundColor: Colors.transparent,
@@ -626,29 +626,56 @@ class _HeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.45),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E5EE), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.rolePsicologo,
-            child: Icon(Icons.chat, color: Colors.white),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.rolePsicologo.withOpacity(0.12),
+            ),
+            child: const Icon(
+              Icons.healing_outlined,
+              color: AppColors.rolePsicologo,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nombre, style: AppTextStyles.titleLarge),
+                Text(
+                  nombre,
+                  style: const TextStyle(
+                    color: Color(0xFF2E2E3A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   documento == null || documento!.isEmpty
-                      ? 'Revisa tus derivaciones'
+                      ? 'Revisa tus derivaciones y pacientes'
                       : 'Documento: $documento',
-                  style: AppTextStyles.bodySmall,
+                  style: const TextStyle(
+                    color: Color(0xFF7C7B8E),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -672,57 +699,217 @@ class _ChatItem extends StatelessWidget {
     required this.onInfoTap,
   });
 
+  LinearGradient _generateAvatarGradient(String name) {
+    final hash = name.hashCode;
+    final index1 = hash.abs() % 5;
+    final index2 = (hash.abs() + 2) % 5;
+
+    final colors = [
+      [
+        const Color.fromARGB(255, 168, 112, 186),
+        const Color.fromARGB(255, 145, 129, 237),
+      ],
+      [
+        const Color.fromARGB(255, 153, 118, 189),
+        const Color.fromARGB(255, 153, 116, 201),
+      ],
+      [
+        const Color.fromARGB(255, 131, 108, 185),
+        const Color.fromARGB(255, 110, 98, 167),
+      ],
+      [
+        const Color.fromARGB(255, 160, 108, 156),
+        const Color.fromARGB(255, 197, 111, 205),
+      ],
+      [const Color(0xFFA78BFA), const Color(0xFF8B5CF6)],
+    ];
+
+    return LinearGradient(
+      colors: [colors[index1][0], colors[index2][1]],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final motivo = (chat['Motivo'] ?? '').toString().trim();
     final categoria = (chat['Categoria'] ?? '').toString().trim();
     final mensaje = (chat['Mensaje'] ?? '').toString().trim();
-    final usuario = (chat['Documento_usuario'] ?? '').toString().trim();
     final fechaRaw = (chat['Fecha_inicio'] ?? '').toString().trim();
     final fecha = DateTime.tryParse(fechaRaw);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF8FC5D8),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        onLongPress: onInfoTap,
-        leading: const CircleAvatar(
-          backgroundColor: Colors.white,
-          child: Icon(Icons.person, color: Color(0xFF4E6A79)),
-        ),
-        title: Text(
-          motivo.isEmpty
-              ? (patientName.isEmpty ? 'Conversación' : patientName)
-              : motivo,
-          style: AppTextStyles.titleLarge.copyWith(
-            color: const Color(0xFF496170),
-          ),
-        ),
-        subtitle: Text(
-          patientName.isEmpty
-              ? (categoria.isEmpty ? mensaje : categoria)
-              : 'Paciente: $patientName',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color(0xFF365667),
-          ),
-        ),
-        trailing: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              fecha != null ? DateFormat('HH:mm').format(fecha) : '--:--',
-              style: AppTextStyles.caption,
+    final title = patientName.isNotEmpty ? patientName : 'Paciente sin nombre';
+    final subtitle = mensaje.isNotEmpty
+        ? mensaje
+        : (categoria.isNotEmpty ? categoria : 'Sin mensaje inicial');
+
+    final initials = title
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
+
+    const cardBg = Colors.white;
+    const borderCol = Color(0xFFE8E5EE);
+    const textTitleCol = Color(0xFF2E2E3A);
+    const textSubCol = Color(0xFF5B7481);
+
+    return Semantics(
+      label:
+          'Conversación con el paciente $title sobre ${motivo.isNotEmpty ? motivo : "terapia"}.',
+      button: true,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderCol, width: 1.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-            const SizedBox(height: 4),
-            const Icon(Icons.arrow_circle_right_outlined, size: 20),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              onLongPress: onInfoTap,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: _generateAvatarGradient(title),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          initials.isNotEmpty ? initials : 'P',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: textTitleCol,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: textSubCol,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.roleUsuario.withOpacity(
+                                    0.16,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Paciente',
+                                  style: TextStyle(
+                                    color: AppColors.roleUsuario,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (motivo.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF0E8F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    motivo,
+                                    style: const TextStyle(
+                                      color: Color(0xFF8B5CF6),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          fecha != null
+                              ? DateFormat('HH:mm').format(fecha)
+                              : '--:--',
+                          style: TextStyle(
+                            color: textSubCol.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: textSubCol.withOpacity(0.35),
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1106,7 +1293,7 @@ class _PsychologistConversationPageState
     final motivo = (_chat['Motivo'] ?? '').toString().trim();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF9F7FC),
       appBar: AppBar(
         title: Text(usuario.isEmpty ? 'Paciente' : usuario),
         backgroundColor: Colors.transparent,
@@ -1172,9 +1359,17 @@ class _PsychComposerBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE8E5EE), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      padding: const EdgeInsets.fromLTRB(14, 5, 5, 5),
       child: Row(
         children: [
           Expanded(
@@ -1184,39 +1379,55 @@ class _PsychComposerBar extends StatelessWidget {
               maxLines: 4,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
-              style: AppTextStyles.titleLarge.copyWith(
-                color: const Color(0xFF4B4860),
-              ),
-              decoration: InputDecoration(
+              style: const TextStyle(color: Color(0xFF2E2E3A), fontSize: 14.5),
+              decoration: const InputDecoration(
                 hintText: 'Escribe una respuesta...',
-                hintStyle: AppTextStyles.titleLarge.copyWith(
-                  color: const Color(0xFF6E6A7A),
-                ),
+                hintStyle: TextStyle(color: Color(0xFF9E9CAF), fontSize: 14.5),
                 filled: true,
                 fillColor: Colors.transparent,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFB89BEA),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: IconButton(
-              onPressed: sending ? null : onSend,
-              icon: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+          const SizedBox(width: 8),
+          Semantics(
+            label: 'Enviar respuesta',
+            button: true,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B5CF6).withOpacity(0.25),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: sending ? null : onSend,
+                padding: EdgeInsets.zero,
+                icon: sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.0,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.arrow_upward,
                         color: Colors.white,
+                        size: 20,
                       ),
-                    )
-                  : const Icon(Icons.send, color: Colors.white),
+              ),
             ),
           ),
         ],
@@ -1244,42 +1455,71 @@ class _PsychChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = message.isFromPatient
-        ? const Color(0xFF8FC5D8)
-        : const Color(0xFFA88AD2);
+    final isFromPatient = message.isFromPatient;
 
-    final textColor = message.isFromPatient
-        ? const Color(0xFF3E4D5A)
-        : Colors.white;
+    final bubbleColor = isFromPatient ? Colors.white : const Color(0xFF8B5CF6);
+
+    final textColor = isFromPatient ? const Color(0xFF2E2E3A) : Colors.white;
+
+    final borderColor = isFromPatient
+        ? const Color(0xFFE8E5EE)
+        : Colors.transparent;
+
+    final alignment = isFromPatient
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+
+    final borderRadius = isFromPatient
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(18),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(4),
+          );
 
     return Align(
-      alignment: message.isFromPatient
-          ? Alignment.centerLeft
-          : Alignment.centerRight,
+      alignment: alignment,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.82,
+          maxWidth: MediaQuery.of(context).size.width * 0.8,
         ),
         decoration: BoxDecoration(
           color: bubbleColor,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: borderRadius,
+          border: Border.all(color: borderColor, width: 1.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
-          crossAxisAlignment: message.isFromPatient
+          crossAxisAlignment: isFromPatient
               ? CrossAxisAlignment.start
               : CrossAxisAlignment.end,
           children: [
             Text(
               message.text,
-              style: AppTextStyles.bodyLarge.copyWith(color: textColor),
+              style: TextStyle(color: textColor, fontSize: 14.5, height: 1.3),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Text(
-              DateFormat('HH:mm').format(message.timestamp),
-              style: AppTextStyles.caption.copyWith(
-                color: textColor.withOpacity(0.75),
+              DateFormat('HH:mm').format(message.timestamp.toLocal()),
+              style: TextStyle(
+                color: isFromPatient
+                    ? const Color(0xFF7C7B8E)
+                    : Colors.white.withOpacity(0.7),
+                fontSize: 10,
               ),
             ),
           ],

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'firestore_service.dart';
 
@@ -13,6 +13,7 @@ class MentalHealthTriageResult {
   final EmotionsAnalysis emotions;
   final List<TherapyRecommendation> therapies;
   final TriageMetrics metrics;
+  final bool isFallback;
 
   const MentalHealthTriageResult({
     required this.category,
@@ -25,6 +26,7 @@ class MentalHealthTriageResult {
     required this.therapies,
     required this.metrics,
     this.psychologist,
+    this.isFallback = true,
   });
 }
 
@@ -207,6 +209,89 @@ class MentalHealthTriageService {
     String conversationMemory = '',
     bool forceMatchPsychologist = false,
   }) async {
+    // 1. Intentar llamar al backend de IA en Render primero
+    try {
+      final response = await ApiClient.post('/api/ai/triage', {
+        'message': message,
+        'conversationContext': recentConversation,
+        'conversationMemory': conversationMemory,
+      }, auth: true);
+
+      final responseMap = response is Map
+          ? response as Map
+          : <String, dynamic>{};
+      final emotionsData = responseMap['emotions'];
+      final emotionsMap = emotionsData is Map
+          ? emotionsData as Map
+          : <String, dynamic>{};
+
+      final therapies = <TherapyRecommendation>[];
+      final rawTherapies = responseMap['therapies'];
+      if (rawTherapies is List) {
+        for (final therapy in rawTherapies) {
+          if (therapy is Map) {
+            therapies.add(
+              TherapyRecommendation(
+                name: therapy['name']?.toString() ?? 'CBT',
+                description:
+                    therapy['description']?.toString() ?? 'Terapia recomendada',
+                suitability: _parseDouble(therapy['suitability'], 0.5),
+              ),
+            );
+          }
+        }
+      }
+
+      final metricsData = responseMap['metrics'];
+      final metricsMap = metricsData is Map
+          ? metricsData as Map
+          : <String, dynamic>{};
+      final triageMetrics = TriageMetrics(
+        confidence: _parseDouble(metricsMap['confidence'], 0.7),
+        processingTime: _parseInt(metricsMap['processingTime'], 0),
+        sentimentScore: _parseDouble(metricsMap['sentimentScore'], 0.0),
+      );
+
+      final emotionsAnalysis = EmotionsAnalysis(
+        primary: emotionsMap['primary']?.toString() ?? 'neutral',
+        intensity: _parseDouble(emotionsMap['intensity'], 0.5),
+        secondary: emotionsMap['secondary']?.toString(),
+      );
+
+      final crisisValue = _parseBool(responseMap['crisis'], false);
+      final isFallbackValue = responseMap['isFallback'] == true;
+
+      PsychologistMatch? psychologist;
+      if (forceMatchPsychologist ||
+          responseMap['category']?.toString().toLowerCase() != 'general') {
+        psychologist = await _findMatchingPsychologist(
+          responseMap['recommendedSpecialty']?.toString() ??
+              'Bienestar emocional',
+        );
+      }
+
+      return MentalHealthTriageResult(
+        category: responseMap['category']?.toString() ?? 'general',
+        label: responseMap['label']?.toString() ?? 'orientación general',
+        reply:
+            responseMap['reply']?.toString() ??
+            'Entiendo lo que me cuentas. ¿Quieres contarme más?',
+        recommendedSpecialty:
+            responseMap['recommendedSpecialty']?.toString() ??
+            'Bienestar emocional',
+        crisis: crisisValue,
+        memory: responseMap['memory']?.toString() ?? conversationMemory,
+        emotions: emotionsAnalysis,
+        therapies: therapies,
+        metrics: triageMetrics,
+        psychologist: psychologist,
+        isFallback: isFallbackValue,
+      );
+    } catch (e, st) {
+      debugPrint('[IA][API-ERROR] El backend en Render falló o no está disponible. Procediendo con el fallback local offline. Detalle: $e');
+      debugPrint(st.toString());
+    }
+
     final normalizedInput = _normalizeAndCorrect(message);
 
     // Respuesta determinista para memoria de identidad.
@@ -435,111 +520,30 @@ class MentalHealthTriageService {
       );
     }
 
-    // Llamada al backend de IA
-    try {
-      final response = await ApiClient.post('/api/ai/triage', {
-        'message': message,
-        'conversationContext': recentConversation,
-        'conversationMemory': conversationMemory,
-      }, auth: true);
-
-      final responseMap = response is Map
-          ? response as Map
-          : <String, dynamic>{};
-      final emotionsData = responseMap['emotions'];
-      final emotionsMap = emotionsData is Map
-          ? emotionsData as Map
-          : <String, dynamic>{};
-
-      final therapies = <TherapyRecommendation>[];
-      final rawTherapies = responseMap['therapies'];
-      if (rawTherapies is List) {
-        for (final therapy in rawTherapies) {
-          if (therapy is Map) {
-            therapies.add(
-              TherapyRecommendation(
-                name: therapy['name']?.toString() ?? 'CBT',
-                description:
-                    therapy['description']?.toString() ?? 'Terapia recomendada',
-                suitability: _parseDouble(therapy['suitability'], 0.5),
-              ),
-            );
-          }
-        }
-      }
-
-      final metricsData = responseMap['metrics'];
-      final metricsMap = metricsData is Map
-          ? metricsData as Map
-          : <String, dynamic>{};
-      final triageMetrics = TriageMetrics(
-        confidence: _parseDouble(metricsMap['confidence'], 0.7),
-        processingTime: _parseInt(metricsMap['processingTime'], 0),
-        sentimentScore: _parseDouble(metricsMap['sentimentScore'], 0.0),
-      );
-
-      final emotionsAnalysis = EmotionsAnalysis(
-        primary: emotionsMap['primary']?.toString() ?? 'neutral',
-        intensity: _parseDouble(emotionsMap['intensity'], 0.5),
-        secondary: emotionsMap['secondary']?.toString(),
-      );
-
-      // Buscar psicólogo si es necesario
-      final crisisValue = _parseBool(responseMap['crisis'], false);
-      PsychologistMatch? psychologist;
-      if (forceMatchPsychologist ||
-          responseMap['category']?.toString().toLowerCase() != 'general') {
-        psychologist = await _findMatchingPsychologist(
-          responseMap['recommendedSpecialty']?.toString() ??
-              'Bienestar emocional',
-        );
-      }
-
-      return MentalHealthTriageResult(
-        category: responseMap['category']?.toString() ?? 'general',
-        label: responseMap['label']?.toString() ?? 'orientación general',
-        reply:
-            responseMap['reply']?.toString() ??
-            'Entiendo lo que me cuentas. ¿Quieres contarme más?',
-        recommendedSpecialty:
-            responseMap['recommendedSpecialty']?.toString() ??
-            'Bienestar emocional',
-        crisis: crisisValue,
-        memory: responseMap['memory']?.toString() ?? conversationMemory,
-        emotions: emotionsAnalysis,
-        therapies: therapies,
-        metrics: triageMetrics,
-        psychologist: psychologist,
-      );
-    } catch (e, st) {
-      debugPrint('[IA][ERROR] $e');
-      debugPrint(st.toString());
-      // Fallback en caso de error
-      final errorMessage = e?.toString() ?? 'error desconocido';
-      return MentalHealthTriageResult(
-        category: 'general',
-        label: 'error temporal',
-        reply:
-            'Lo siento, no pude conectar con el servicio de IA: $errorMessage. Verifica el backend y vuelve a intentarlo.',
-        recommendedSpecialty: 'Bienestar emocional',
-        crisis: false,
-        memory: conversationMemory,
-        emotions: const EmotionsAnalysis(primary: 'neutral', intensity: 0.3),
-        therapies: const [
-          TherapyRecommendation(
-            name: 'CBT',
-            description: 'Terapia Cognitivo-Conductual',
-            suitability: 0.5,
-          ),
-        ],
-        metrics: const TriageMetrics(
-          confidence: 0.3,
-          processingTime: 0,
-          sentimentScore: 0.0,
-        ),
-        psychologist: null,
-      );
-    }
+    // 3. Fallback local por defecto si ningún regex interceptó y la API falló
+    return MentalHealthTriageResult(
+      category: 'general',
+      label: 'orientación general',
+      reply: 'Entiendo lo que me cuentas. Por ahora tengo un problema de conexión con mi servidor, pero cuéntame: ¿cómo te sientes hoy y qué te preocupa?',
+      recommendedSpecialty: 'Bienestar emocional',
+      crisis: false,
+      memory: conversationMemory,
+      emotions: const EmotionsAnalysis(primary: 'neutral', intensity: 0.3),
+      therapies: const [
+        TherapyRecommendation(
+          name: 'CBT',
+          description: 'Terapia Cognitivo-Conductual general',
+          suitability: 0.5,
+        )
+      ],
+      metrics: const TriageMetrics(
+        confidence: 0.5,
+        processingTime: 0,
+        sentimentScore: 0.0,
+      ),
+      psychologist: null,
+      isFallback: true,
+    );
   }
 
   static double _parseDouble(dynamic value, [double fallback = 0.0]) {

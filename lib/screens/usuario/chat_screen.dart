@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -149,8 +148,27 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    _loadIaChatHistory();
-    _loadMyChats();
+    // Cargar historial y mis chats de forma concurrente
+    setState(() {
+      _isLoadingChats = true;
+      _chatsError = null;
+    });
+    Future.wait([_loadIaChatHistory(), _loadMyChats(showLoader: false)])
+        .then((_) {
+          if (mounted) {
+            setState(() {
+              _isLoadingChats = false;
+            });
+          }
+        })
+        .catchError((err) {
+          if (mounted) {
+            setState(() {
+              _isLoadingChats = false;
+              _chatsError = err.toString();
+            });
+          }
+        });
   }
 
   @override
@@ -357,7 +375,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? 'Derivación creada con ${psicologo.name}.'
                 : 'Derivación creada.',
           ),
-          backgroundColor: AppColors.success,
+          backgroundColor: const Color.fromARGB(255, 234, 172, 230),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -381,7 +399,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _loadMyChats() async {
+  Future<void> _loadMyChats({bool showLoader = true}) async {
     final documento = _documentoUsuario;
     final uid = _uidUsuario;
 
@@ -390,18 +408,18 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    setState(() {
-      _isLoadingChats = true;
-      _chatsError = null;
-    });
+    if (showLoader) {
+      setState(() {
+        _isLoadingChats = true;
+        _chatsError = null;
+      });
+    }
 
     try {
       final chats = await ChatService.fetchChats(
         documento: documento,
         uid: uid,
       );
-
-      if (!mounted) return;
 
       if (!mounted) return;
       setState(() {
@@ -411,13 +429,11 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      if (!mounted) return;
       setState(() {
         _chatsError = error.toString();
       });
     } finally {
-      if (mounted) {
-        if (!mounted) return;
+      if (showLoader && mounted) {
         setState(() {
           _isLoadingChats = false;
         });
@@ -446,19 +462,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<Map<String, dynamic>> get _filteredChats {
     final query = _chatQuery.trim().toLowerCase();
-    if (query.isEmpty) return _myChats;
+    final list = _myChats;
 
-    return _myChats.where((chat) {
+    if (query.isEmpty) return list;
+
+    return list.where((chat) {
       final motivo = (chat['Motivo'] ?? '').toString().toLowerCase();
       final categoria = (chat['Categoria'] ?? '').toString().toLowerCase();
       final mensaje = (chat['Mensaje'] ?? '').toString().toLowerCase();
       final psicologo = (chat['Documento_psicologo'] ?? '')
           .toString()
           .toLowerCase();
+      final psicologoNombre = (chat['nombre_psicologo'] ?? '')
+          .toString()
+          .toLowerCase();
       return motivo.contains(query) ||
           categoria.contains(query) ||
           mensaje.contains(query) ||
-          psicologo.contains(query);
+          psicologo.contains(query) ||
+          psicologoNombre.contains(query);
     }).toList();
   }
 
@@ -469,7 +491,7 @@ class _ChatScreenState extends State<ChatScreen> {
           nombreUsuario: _nombreUsuario,
           documentoUsuario: _documentoUsuario,
           uidUsuario: FirebaseAuth.instance.currentUser?.uid,
-          onReferralCreated: _loadMyChats,
+          onReferralCreated: () => _loadMyChats(showLoader: false),
         ),
       ),
     );
@@ -488,45 +510,139 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
 
-    await _loadMyChats();
+    await _loadMyChats(showLoader: false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomNavSpace = MediaQuery.of(context).padding.bottom + 88;
+    // Forzar fondo claro/blanco y colores de la app según solicitud
+    final scaffoldBg = const Color(0xFFF9F7FC);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: scaffoldBg,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(14, 10, 14, bottomNavSpace),
-          child: Column(
-            children: [
-              _ChatHeader(name: _nombreUsuario),
-              const SizedBox(height: 12),
-              _SearchBar(
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _chatQuery = value;
-                  });
-                },
-              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth >= 600;
 
-              const SizedBox(height: 12),
-              Expanded(
-                child: _ChatsListPanel(
-                  chats: _filteredChats,
-                  isLoading: _isLoadingChats,
-                  errorMessage: _chatsError,
-                  onRefresh: _loadMyChats,
-                  onStartChat: _openConversationPage,
-                  onOpenChat: _openExistingChat,
-                  resolvePsychologistName: _resolvePsychologistName,
+            // Centrado responsivo con ancho máximo para tablets/web
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFF7F1FF), Color(0xFFF9F7FC)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                Positioned(
+                  top: 90,
+                  right: -30,
+                  child: Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 220,
+                  left: -40,
+                  child: Container(
+                    width: 150,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primary.withOpacity(0.08),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 180,
+                  right: 20,
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.18),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 340,
+                  left: 20,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF4ECFF).withOpacity(0.24),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: isTablet ? 650 : double.infinity,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 24 : 14,
+                      vertical: 12,
+                    ),
+                    child: Column(
+                      children: [
+                        _ChatHeader(
+                          name: _nombreUsuario,
+                          onStartChat: _openConversationPage,
+                        ),
+                        const SizedBox(height: 14),
+                        _SearchBar(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() {
+                              _chatQuery = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: _ChatsListPanel(
+                            chats: _filteredChats,
+                            isLoading: _isLoadingChats,
+                            errorMessage: _chatsError,
+                            onRefresh: () => _loadMyChats(showLoader: true),
+                            onStartChat: _openConversationPage,
+                            onOpenChat: _openExistingChat,
+                            resolvePsychologistName: _resolvePsychologistName,
+                            currentUid:
+                                _uidUsuario ??
+                                FirebaseAuth.instance.currentUser?.uid ??
+                                '',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 120),
+                    child: _AuraAiFloatingButton(onTap: _openConversationPage),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -546,33 +662,110 @@ class _ChatScreenState extends State<ChatScreen> {
 
 class _ChatHeader extends StatelessWidget {
   final String name;
+  final VoidCallback onStartChat;
 
-  const _ChatHeader({required this.name});
+  const _ChatHeader({required this.name, required this.onStartChat});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.42),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.rolePsicologo.withOpacity(0.18),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isTablet = constraints.maxWidth >= 600;
+        final avatarRadius = isTablet ? 26.0 : 20.0;
+        final titleStyle = isTablet
+            ? AppTextStyles.headlineLarge.copyWith(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              )
+            : AppTextStyles.headlineMedium.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              );
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+            horizontal: isTablet ? 16 : 10,
+            vertical: isTablet ? 12 : 8,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [Text(name, style: AppTextStyles.headlineMedium)],
-            ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE8E5EE), width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              Semantics(
+                label: 'Foto de perfil de $name',
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFB89BEA).withOpacity(0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: avatarRadius,
+                    backgroundColor: const Color(0xFFF4ECFF),
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                      style: TextStyle(
+                        color: const Color(0xFF8B5CF6),
+                        fontWeight: FontWeight.bold,
+                        fontSize: isTablet ? 18 : 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: isTablet ? 12 : 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hola, $name',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle.copyWith(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '¿Cómo te encuentras hoy?',
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: isTablet ? 12 : 11,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: isTablet ? 12 : 10),
+              Semantics(
+                label: 'Chat con AURA AI',
+                button: true,
+                child: InkWell(
+                  onTap: onStartChat,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: isTablet ? 48 : 40,
+                    height: isTablet ? 48 : 40,
+                    decoration: BoxDecoration(shape: BoxShape.circle),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -585,33 +778,195 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      style: AppTextStyles.bodyLarge.copyWith(color: const Color(0xFF4B4860)),
-      decoration: InputDecoration(
-        hintText: 'Buscar chats',
-        hintStyle: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromARGB(255, 95, 85, 123),
+    return Semantics(
+      label: 'Buscar conversaciones',
+      textField: true,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: AppTextStyles.bodyLarge.copyWith(color: const Color(0xFF4B4860)),
+        decoration: InputDecoration(
+          hintText: 'Buscar chats...',
+          hintStyle: AppTextStyles.bodyLarge.copyWith(
+            color: const Color.fromARGB(255, 120, 110, 150),
+          ),
+          prefixIcon: const Icon(Icons.search, color: Color(0xFF6E6A7A)),
+          suffixIcon: controller.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: Color(0xFF6E6A7A)),
+                  onPressed: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: const Color(0xFFF4ECFF),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFB89BEA), width: 1.2),
+          ),
         ),
-        prefixIcon: const Icon(Icons.search, color: Color(0xFF6E6A7A)),
-        filled: true,
-        fillColor: const Color(0xFFF4ECFF),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
+      ),
+    );
+  }
+}
+
+class _AuraAiFloatingButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _AuraAiFloatingButton({required this.onTap});
+
+  @override
+  State<_AuraAiFloatingButton> createState() => _AuraAiFloatingButtonState();
+}
+
+class _AuraAiFloatingButtonState extends State<_AuraAiFloatingButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _animation,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF8B5CF6).withOpacity(0.4),
+              blurRadius: 12,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+        child: ClipOval(
+          child: Material(
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      AppColors.primaryLight,
+                      AppColors.primary,
+                      Color.fromARGB(255, 167, 124, 204),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Center(
+                  child: Semantics(
+                    label: 'Chat con AURA AI',
+                    button: true,
+                    child: const Text('👩‍🦰', style: TextStyle(fontSize: 26)),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFB89BEA), width: 1.2),
+      ),
+    );
+  }
+}
+
+class _EmptyChatsState extends StatelessWidget {
+  final VoidCallback onStartChat;
+
+  const _EmptyChatsState({required this.onStartChat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 64,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No hay conversaciones',
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Text(
+                  'Inicia una derivación contándole cómo te sientes al asistente AURA AI presionando el logo flotante 🤖 abajo a la izquierda.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textHint,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onStartChat,
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Iniciar chat'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 165, 97, 179),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  minimumSize: Size.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -626,6 +981,7 @@ class _ChatsListPanel extends StatelessWidget {
   final VoidCallback onStartChat;
   final Future<void> Function(Map<String, dynamic>) onOpenChat;
   final String Function(Map<String, dynamic>) resolvePsychologistName;
+  final String currentUid;
 
   const _ChatsListPanel({
     super.key,
@@ -636,97 +992,73 @@ class _ChatsListPanel extends StatelessWidget {
     required this.onStartChat,
     required this.onOpenChat,
     required this.resolvePsychologistName,
+    required this.currentUid,
   });
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'No pude cargar tus chats',
-              style: AppTextStyles.titleLarge.copyWith(color: AppColors.error),
-            ),
-            const SizedBox(height: 8),
-            Text(errorMessage!, style: AppTextStyles.bodySmall),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: onRefresh,
-              child: const Text('Reintentar'),
-            ),
-          ],
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
         ),
       );
     }
 
-    if (chats.isEmpty) {
-      return _StartChatPrompt(onStartChat: onStartChat, emptyState: true);
+    if (errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.error,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No pude cargar tus chats',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.error,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: onRefresh,
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    return Stack(
-      children: [
-        RefreshIndicator(
-          onRefresh: onRefresh,
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 92),
-            itemCount: chats.length,
-            itemBuilder: (context, index) {
-              return _ChatSummaryTile(
-                chat: chats[index],
-                onTap: () => onOpenChat(chats[index]),
-                psychologistName: resolvePsychologistName(chats[index]),
-              );
-            },
-          ),
-        ),
-        Positioned(
-          right: 8,
-          bottom: 12,
-          child: _StartChatPrompt(onStartChat: onStartChat, emptyState: false),
-        ),
-      ],
-    );
-  }
-}
-
-class _StartChatPrompt extends StatelessWidget {
-  final VoidCallback onStartChat;
-  final bool emptyState;
-
-  const _StartChatPrompt({required this.onStartChat, required this.emptyState});
-
-  @override
-  Widget build(BuildContext context) {
-    final promptColor = emptyState ? Colors.transparent : Colors.white;
-
-    return Container(
-      padding: emptyState
-          ? const EdgeInsets.fromLTRB(8, 8, 8, 18)
-          : const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: promptColor,
-        borderRadius: BorderRadius.circular(emptyState ? 0 : 18),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          IconButton(
-            onPressed: onStartChat,
-            iconSize: 42,
-            icon: const Icon(Icons.mark_chat_unread_rounded),
-            color: const Color(0xFF1F9AA8),
-            tooltip: 'Iniciar conversación',
-          ),
-          const SizedBox(height: 4),
-        ],
-      ),
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: chats.isEmpty
+          ? _EmptyChatsState(onStartChat: onStartChat)
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 90, left: 4, right: 4),
+              itemCount: chats.length,
+              itemBuilder: (context, index) {
+                return _ChatSummaryTile(
+                  chat: chats[index],
+                  onTap: () => onOpenChat(chats[index]),
+                  psychologistName: resolvePsychologistName(chats[index]),
+                  currentUid: currentUid,
+                );
+              },
+            ),
     );
   }
 }
@@ -990,7 +1322,7 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF9F7FC),
       appBar: AppBar(
         title: Text(
           _displayPsychologistName.isEmpty
@@ -1036,61 +1368,10 @@ class _ExistingChatPageState extends State<_ExistingChatPage> {
                             ),
                     ),
                     const SizedBox(height: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _messageController,
-                              minLines: 1,
-                              maxLines: 4,
-                              textInputAction: TextInputAction.send,
-                              onSubmitted: (_) => _sendMessage(),
-                              style: AppTextStyles.titleLarge.copyWith(
-                                color: const Color(0xFF4B4860),
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'Escribe....',
-                                hintStyle: AppTextStyles.titleLarge.copyWith(
-                                  color: const Color(0xFF6E6A7A),
-                                ),
-                                filled: true,
-                                fillColor: Colors.transparent,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFB89BEA),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: IconButton(
-                              onPressed: _sending ? null : _sendMessage,
-                              icon: _sending
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.arrow_forward,
-                                      color: Colors.white,
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    _ComposerBar(
+                      messageController: _messageController,
+                      isSending: _sending,
+                      onSubmit: _sendMessage,
                     ),
                   ],
                 ),
@@ -1810,7 +2091,8 @@ class _ConversationPageState extends State<_ConversationPage> {
               !_hasSuggestedReferral &&
               _shouldSuggestReferral(triage, lastUserMessage: text);
 
-          if (!directHumanSupportRequest &&
+          if (triage.isFallback &&
+              !directHumanSupportRequest &&
               !_isNegativePsychologistRequest(text) &&
               !_isMemoryRecallIntent(text) &&
               !shouldOfferReferral &&
@@ -1920,7 +2202,7 @@ class _ConversationPageState extends State<_ConversationPage> {
                 ? 'Derivación creada con ${psicologo.name}.'
                 : 'Derivación creada.',
           ),
-          backgroundColor: AppColors.success,
+          backgroundColor: const Color.fromARGB(255, 157, 116, 183),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2017,7 +2299,7 @@ class _ConversationPageState extends State<_ConversationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF9F7FC),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.fromLTRB(
@@ -2119,9 +2401,17 @@ class _ComposerBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE8E5EE), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      padding: const EdgeInsets.fromLTRB(14, 5, 5, 5),
       child: Row(
         children: [
           Expanded(
@@ -2131,39 +2421,55 @@ class _ComposerBar extends StatelessWidget {
               maxLines: 4,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSubmit(),
-              style: AppTextStyles.titleLarge.copyWith(
-                color: const Color(0xFF4B4860),
-              ),
-              decoration: InputDecoration(
-                hintText: 'Escribe..',
-                hintStyle: AppTextStyles.titleLarge.copyWith(
-                  color: const Color(0xFF6E6A7A),
-                ),
+              style: const TextStyle(color: Color(0xFF2E2E3A), fontSize: 14.5),
+              decoration: const InputDecoration(
+                hintText: 'Escribe un mensaje...',
+                hintStyle: TextStyle(color: Color(0xFF9E9CAF), fontSize: 14.5),
                 filled: true,
                 fillColor: Colors.transparent,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFB89BEA),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: IconButton(
-              onPressed: isSending ? null : onSubmit,
-              icon: isSending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+          const SizedBox(width: 8),
+          Semantics(
+            label: 'Enviar mensaje',
+            button: true,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B5CF6).withOpacity(0.25),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: isSending ? null : onSubmit,
+                padding: EdgeInsets.zero,
+                icon: isSending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.0,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.arrow_upward,
                         color: Colors.white,
+                        size: 20,
                       ),
-                    )
-                  : const Icon(Icons.arrow_forward, color: Colors.white),
+              ),
             ),
           ),
         ],
@@ -2195,49 +2501,83 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = message.isUser
-        ? const Color(0xFFA88AD2)
-        : message.isError
-        ? AppColors.error.withOpacity(0.18)
-        : message.highlight
-        ? AppColors.warning.withOpacity(0.2)
-        : const Color(0xFF8FC5D8);
+    final isUser = message.isUser;
 
-    final textColor = message.isUser ? Colors.white : const Color(0xFF3E4D5A);
+    final bubbleColor = isUser
+        ? const Color(0xFF8B5CF6)
+        : message.isError
+        ? const Color(0xFFFEE2E2)
+        : message.highlight
+        ? const Color(0xFFFEF3C7)
+        : Colors.white;
+
+    final textColor = isUser
+        ? Colors.white
+        : message.isError
+        ? const Color(0xFF991B1B)
+        : const Color(0xFF2E2E3A);
+
+    final borderColor = isUser
+        ? Colors.transparent
+        : message.isError
+        ? const Color.fromARGB(255, 171, 111, 163)
+        : message.highlight
+        ? const Color.fromARGB(255, 121, 81, 141)
+        : const Color(0xFFE8E5EE);
+
+    final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
+
+    final borderRadius = isUser
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(4),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(18),
+          );
 
     return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: alignment,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.8,
         ),
         decoration: BoxDecoration(
           color: bubbleColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
+          borderRadius: borderRadius,
+          border: Border.all(color: borderColor, width: 1.0),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x22000000),
-              blurRadius: 8,
-              offset: Offset(0, 4),
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment: message.isUser
+          crossAxisAlignment: isUser
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
             Text(
               message.text,
-              style: AppTextStyles.bodyLarge.copyWith(color: textColor),
+              style: TextStyle(color: textColor, fontSize: 14.5, height: 1.3),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Text(
               DateFormat('HH:mm').format(message.timestamp.toLocal()),
-              style: AppTextStyles.caption.copyWith(
-                color: textColor.withOpacity(0.75),
+              style: TextStyle(
+                color: isUser
+                    ? Colors.white.withOpacity(0.7)
+                    : const Color(0xFF7C7B8E),
+                fontSize: 10,
               ),
             ),
           ],
@@ -2259,13 +2599,13 @@ class _TriageBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: triage.crisis
-            ? AppColors.error.withOpacity(0.12)
-            : const Color(0xFF8FC5D8).withOpacity(0.38),
+            ? const Color.fromARGB(255, 143, 91, 159).withOpacity(0.12)
+            : const Color.fromARGB(255, 103, 108, 184).withOpacity(0.38),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: triage.crisis
-              ? AppColors.error.withOpacity(0.25)
-              : const Color(0xFF5AA3B8),
+              ? const Color.fromARGB(255, 99, 68, 239).withOpacity(0.25)
+              : const Color.fromARGB(255, 127, 132, 228),
         ),
       ),
       child: Column(
@@ -2362,12 +2702,43 @@ class _ChatSummaryTile extends StatelessWidget {
   final Map<String, dynamic> chat;
   final VoidCallback onTap;
   final String psychologistName;
+  final String currentUid;
 
   const _ChatSummaryTile({
     required this.chat,
     required this.onTap,
     required this.psychologistName,
+    required this.currentUid,
   });
+
+  LinearGradient _generateAvatarGradient(String name) {
+    final hash = name.hashCode;
+    final index1 = hash.abs() % 5;
+    final index2 = (hash.abs() + 2) % 5;
+
+    final colors = [
+      [const Color(0xFFF472B6), const Color(0xFFEC4899)],
+      [
+        const Color.fromARGB(255, 126, 71, 126),
+        const Color.fromARGB(255, 133, 93, 144),
+      ],
+      [
+        const Color.fromARGB(255, 132, 78, 149),
+        const Color.fromARGB(255, 186, 122, 207),
+      ],
+      [
+        const Color.fromARGB(255, 156, 76, 163),
+        const Color.fromARGB(255, 115, 70, 122),
+      ],
+      [const Color(0xFFA78BFA), const Color(0xFF8B5CF6)],
+    ];
+
+    return LinearGradient(
+      colors: [colors[index1][0], colors[index2][1]],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2377,82 +2748,216 @@ class _ChatSummaryTile extends StatelessWidget {
     final fechaRaw = (chat['Fecha_inicio'] ?? '').toString().trim();
     final fecha = DateTime.tryParse(fechaRaw);
 
-    final title = motivo.isNotEmpty ? motivo : 'Chat';
-    final subtitle = mensaje.isNotEmpty
-        ? mensaje
-        : (category.isNotEmpty ? category : 'Sin mensaje inicial');
-
-    // Mostrar el nombre del psicólogo si está disponible, si no, mostrar el documento
     String displayPsychologist = psychologistName;
     if (displayPsychologist.isEmpty) {
       final doc = (chat['Documento_psicologo'] ?? '').toString().trim();
       displayPsychologist = doc.isNotEmpty ? doc : 'Sin psicólogo asignado';
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF9BCBDD),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 24,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.person, color: Color(0xFF4E6A79)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final hasDoctor =
+        displayPsychologist.isNotEmpty &&
+        displayPsychologist != 'Sin psicólogo asignado';
+    final roleLabel = hasDoctor ? 'Psicólogo' : 'Paciente';
+    final roleColor = hasDoctor
+        ? AppColors.rolePsicologo
+        : AppColors.roleUsuario;
+
+    // Título principal: Nombre del psicólogo (o motivo si no está asignado)
+    String title = displayPsychologist;
+    if (title == 'Sin psicólogo asignado' && motivo.isNotEmpty) {
+      title = motivo;
+    }
+
+    final subtitle = mensaje.isNotEmpty
+        ? mensaje
+        : (category.isNotEmpty ? category : 'Sin mensaje inicial');
+
+    final lastAuthorUid = (chat['UltimoAutorUid'] ?? '').toString().trim();
+    final hasUnread =
+        lastAuthorUid.isNotEmpty &&
+        currentUid.isNotEmpty &&
+        lastAuthorUid != currentUid;
+
+    final avatarName = displayPsychologist.isNotEmpty
+        ? displayPsychologist
+        : 'P';
+    final initials = avatarName
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
+
+    // Forzar colores claros y limpios del tema
+    final cardBg = Colors.white;
+    final borderCol = const Color(0xFFE8E5EE);
+    final textTitleCol = const Color(0xFF2E2E3A); // Contraste alto oscuro
+    final textSubCol = const Color(0xFF5B7481);
+
+    return Semantics(
+      label:
+          'Conversación de $roleLabel sobre ${motivo.isNotEmpty ? motivo : "terapia"} ${hasDoctor ? "con el psicólogo $displayPsychologist" : "sin psicólogo asignado"}. ${hasUnread ? "Mensaje no leído." : ""}',
+      button: true,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderCol, width: 1.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: const Color(0xFF496170),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: _generateAvatarGradient(avatarName),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          initials.isNotEmpty ? initials : 'P',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: const Color(0xFF4E6A79),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleLarge.copyWith(
+                              color: textTitleCol,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              color: textSubCol,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: roleColor.withOpacity(0.16),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              roleLabel,
+                              style: TextStyle(
+                                color: roleColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          // Mostrar el motivo/categoría como tag discreto si el título es el nombre del doctor
+                          if (motivo.isNotEmpty && title != motivo) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0E8F9),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                motivo,
+                                style: const TextStyle(
+                                  color: Color(0xFF8B5CF6),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    Text(
-                      'Psicólogo: $displayPsychologist',
-                      style: AppTextStyles.caption.copyWith(
-                        color: const Color(0xFF5B7481),
-                      ),
+                    const SizedBox(width: 6),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          fecha != null
+                              ? DateFormat('HH:mm').format(fecha)
+                              : '--:--',
+                          style: AppTextStyles.caption.copyWith(
+                            color: textSubCol.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if (hasUnread)
+                          Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                              color: Color.fromARGB(255, 141, 107, 163),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Text(
+                              '1',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: textSubCol.withOpacity(0.35),
+                            size: 13,
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Column(
-                children: [
-                  Text(
-                    fecha != null ? DateFormat('HH:mm').format(fecha) : '--:--',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color(0xFF5B7481),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Icon(
-                    Icons.arrow_circle_right_outlined,
-                    color: Color(0xFF5B7481),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
